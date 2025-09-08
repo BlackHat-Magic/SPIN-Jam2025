@@ -1,0 +1,27 @@
+[package]
+name = "klaus_of_death"
+version = "0.0.0"
+edition = "2024"
+build = "build.rs"
+
+[dependencies]
+derive = { path = "derive" }
+bytemuck = "1.23.2"
+env_logger = "0.11.8"
+image = "0.25.8"
+lazy_static = "1.5.0"
+pollster = "0.4.0"
+serde = { version = "1.0.219", features = ["alloc", "derive", "rc", "std"] }
+serde_json = "1.0.143"
+wgpu = { version = "26.0.1", features = ["spirv"] }
+winit = "0.30.12"
+typeid = "1.0.3"
+inventory = "0.3.21"
+
+[build-dependencies]
+naga = { version = "26.0.0", features = ["wgsl-in", "spv-out"] }
+
+[workspace]
+members = [
+    "derive",
+]
