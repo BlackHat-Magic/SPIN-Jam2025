@@ -1,4 +1,4 @@
-use crate::ecs::*;
+use crate::*;
 
 pub trait System: Send + Sync {
     // should only be called by the scheduler

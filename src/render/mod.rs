@@ -3,7 +3,6 @@ pub mod sprite;
 use crate::*;
 
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -34,23 +33,6 @@ impl Displayable for Box<dyn Displayable> {
     fn get_texture_and_size(&self) -> (&wgpu::Texture, wgpu::Extent3d) {
         (**self).get_texture_and_size()
     }
-}
-
-fn gather_all_files(root: PathBuf) -> std::io::Result<Vec<PathBuf>> {
-    let read_dir = std::fs::read_dir(root)?;
-    let mut files = Vec::new();
-
-    for entry in read_dir {
-        let entry = entry?;
-        let path = entry.path();
-        if path.is_dir() {
-            files.extend(gather_all_files(path)?);
-        } else {
-            files.push(path);
-        }
-    }
-
-    Ok(files)
 }
 
 pub struct Quad {
@@ -90,20 +72,15 @@ impl Gpu {
         let cap = surface.get_capabilities(&adapter);
         let surface_format = cap.formats[0];
 
-        let mut shaders = HashMap::new();
-
-        let shaders_dir = crate::get_resource_path("shaders");
-        let shader_files = gather_all_files(PathBuf::from(&shaders_dir)).unwrap();
-
-        for file in shader_files {
-            let file_extension = file.extension().unwrap().to_str().unwrap();
+        let shaders = crate::gather_dir("shaders", |path| {
+            let file_extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
 
             let shader = match file_extension {
                 #[cfg(debug_assertions)]
                 "wgsl" => device.create_shader_module(wgpu::ShaderModuleDescriptor {
-                    label: file.to_str(),
+                    label: path.to_str(),
                     source: wgpu::ShaderSource::Wgsl(
-                        std::fs::read_to_string(&file)
+                        std::fs::read_to_string(&path)
                             .expect("Failed to read shader file")
                             .into(),
                     ),
@@ -111,38 +88,25 @@ impl Gpu {
                 #[cfg(not(debug_assertions))]
                 "spv" => {
                     let shader_data: Vec<u8> =
-                        std::fs::read(&file).expect("Failed to read shader file");
+                        std::fs::read(&path).expect("Failed to read shader file");
                     let source = wgpu::util::make_spirv(&shader_data);
 
                     device.create_shader_module(wgpu::ShaderModuleDescriptor {
-                        label: file.to_str(),
+                        label: path.to_str(),
                         source,
                     })
                 }
                 _ => {
                     println!(
                         "Warning: Unsupported shader file extension: .{} at {:?}",
-                        file_extension, file
+                        file_extension, path
                     );
-                    continue;
+                    return None;
                 }
             };
 
-            let relative_dir = file
-                .strip_prefix(&shaders_dir)
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .strip_suffix(&format!(".{}", file_extension))
-                .unwrap()
-                .to_string();
-
-            #[cfg(target_os = "windows")]
-            let relative_dir = relative_dir.replace("\\", "/");
-
-            println!("Loaded shader: {}", relative_dir);
-            shaders.insert(relative_dir, shader);
-        }
+            Some(shader)
+        }).unwrap();
 
         let state = Self {
             window,

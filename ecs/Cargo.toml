@@ -1,12 +1,9 @@
 [package]
-name = "derive"
+name = "ecs"
 version = "0.0.0"
 edition = "2024"
 
 [dependencies]
+derive = { path = "derive" }
 inventory = "0.3.21"
-quote = "1.0.40"
-syn = "2.0.106"
-
-[lib]
-proc-macro = true
+typeid = "1.0.3"

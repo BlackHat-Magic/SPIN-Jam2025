@@ -1,7 +1,7 @@
+pub mod query;
 pub mod scheduler;
 pub mod system;
 pub mod world;
-pub mod query;
 
 use typeid::ConstTypeId;
 
@@ -12,9 +12,9 @@ use std::sync::OnceLock;
 pub use derive::Component;
 pub use derive::Resource;
 
+pub use query::{Query, QueryPattern};
 pub use scheduler::Scheduler;
 pub use system::System;
-pub use query::{Query, QueryPattern};
 pub use world::World;
 
 pub trait Component: Any {
@@ -89,7 +89,7 @@ pub struct Entity {
 }
 
 impl Entity {
-    pub(crate) fn new(id: u32) -> Self {
+    pub fn new(id: u32) -> Self {
         Self {
             id,
             components: Vec::with_capacity(COMPONENT_IDS.get().unwrap().len()),

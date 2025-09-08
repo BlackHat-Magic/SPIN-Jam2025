@@ -1,4 +1,4 @@
-use crate::ecs::*;
+use crate::*;
 
 pub struct Scheduler {
     world: *mut World,

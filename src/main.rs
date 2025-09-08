@@ -9,11 +9,10 @@ use winit::{
 
 pub mod render;
 pub mod utils;
-pub mod ecs;
 
+pub use ecs::*;
 use render::Gpu;
 pub use utils::*;
-pub use ecs::*;
 
 #[derive(Default)]
 struct App {
