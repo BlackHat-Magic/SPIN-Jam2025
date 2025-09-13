@@ -61,4 +61,35 @@ fn main() {
 
     let mut app = App::default();
     event_loop.run_app(&mut app).unwrap();
+
+    let _ = my_system;
 }
+
+#[derive(Component)]
+struct Transform {
+    position: f32,
+}
+
+#[derive(Component)]
+struct Velocity(f32);
+
+#[derive(Resource)]
+struct Time {
+    delta_seconds: f32,
+}
+
+ecs::system!(
+    fn my_system(
+        query: query (&mut Transform, &Velocity),
+        time: res &Time,
+    ) {
+        if time.is_none() {
+            return;
+        }
+        let time = time.unwrap();
+
+        for (transform, velocity) in query {
+            transform.position += velocity.0 * time.delta_seconds;
+        }
+    }
+);

@@ -149,6 +149,7 @@ impl Gpu {
         self.configure_surface();
     }
 
+    // Will be refactored later to be compatible with the ECS system
     pub fn render(&mut self) {
         let surface_texture = self
             .surface

@@ -7,3 +7,4 @@ edition = "2024"
 derive = { path = "derive" }
 inventory = "0.3.21"
 typeid = "1.0.3"
+lazy_static = "1.5.0"

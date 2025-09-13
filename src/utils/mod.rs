@@ -63,7 +63,7 @@ fn gather_all_files(root: &PathBuf) -> Result<Vec<PathBuf>> {
 
 pub fn gather_dir<T>(
     dir: &str,
-    filter_map: impl Fn(&PathBuf) -> Option<T>,
+    mut filter_map: impl FnMut(&PathBuf) -> Option<T>,
 ) -> Result<HashMap<String, T>> {
     let mut results = HashMap::new();
     let path = get_resource_path(dir);

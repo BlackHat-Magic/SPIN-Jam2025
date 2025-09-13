@@ -1,9 +1,9 @@
-pub mod query;
 pub mod scheduler;
 pub mod system;
 pub mod world;
 
-use typeid::ConstTypeId;
+pub use typeid::ConstTypeId;
+pub use inventory::submit;
 
 use std::any::Any;
 use std::collections::HashMap;
@@ -11,11 +11,13 @@ use std::sync::OnceLock;
 
 pub use derive::Component;
 pub use derive::Resource;
+pub use derive::system;
 
-pub use query::{Query, QueryPattern};
-pub use scheduler::Scheduler;
-pub use system::System;
+pub use scheduler::{Scheduler, Tick};
+pub use system::*;
 pub use world::World;
+
+pub use lazy_static::lazy_static;
 
 pub trait Component: Any {
     fn get_type_id(&self) -> usize;
@@ -42,10 +44,13 @@ pub struct ResourceRegistration {
 inventory::collect!(ComponentRegistration);
 inventory::collect!(ResourceRegistration);
 
-static COMPONENT_IDS: OnceLock<HashMap<ConstTypeId, usize>> = OnceLock::new();
-static RESOURCE_IDS: OnceLock<HashMap<ConstTypeId, usize>> = OnceLock::new();
+static COMPONENT_IDS: OnceLock<HashMap<ComponentId, usize>> = OnceLock::new();
+static RESOURCE_IDS: OnceLock<HashMap<ResourceId, usize>> = OnceLock::new();
 
-fn build_component_ids() -> HashMap<ConstTypeId, usize> {
+pub type ComponentId = ConstTypeId;
+pub type ResourceId = ConstTypeId;
+
+fn build_component_ids() -> HashMap<ComponentId, usize> {
     let mut entries: Vec<_> = inventory::iter::<ComponentRegistration>
         .into_iter()
         .collect();
@@ -57,7 +62,7 @@ fn build_component_ids() -> HashMap<ConstTypeId, usize> {
         .collect()
 }
 
-fn build_resource_ids() -> HashMap<ConstTypeId, usize> {
+fn build_resource_ids() -> HashMap<ResourceId, usize> {
     let mut entries: Vec<_> = inventory::iter::<ResourceRegistration>
         .into_iter()
         .collect();
@@ -69,14 +74,14 @@ fn build_resource_ids() -> HashMap<ConstTypeId, usize> {
         .collect()
 }
 
-pub fn get_component_id<T: 'static>() -> usize {
+pub fn get_component_id<T>() -> usize {
     *COMPONENT_IDS
         .get_or_init(build_component_ids)
         .get(&ConstTypeId::of::<T>())
         .expect("Component not registered")
 }
 
-pub fn get_resource_id<T: 'static>() -> usize {
+pub fn get_resource_id<T>() -> usize {
     *RESOURCE_IDS
         .get_or_init(build_resource_ids)
         .get(&ConstTypeId::of::<T>())
