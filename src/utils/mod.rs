@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::io::Result;
+use anyhow::Result;
 use std::path::PathBuf;
 
 pub fn get_resource_path(relative_path: &str) -> PathBuf {
@@ -15,12 +15,14 @@ pub fn get_resource_path(relative_path: &str) -> PathBuf {
 
 pub fn load_resource_string(relative_path: &str) -> Result<String> {
     let path = get_resource_path(relative_path);
-    std::fs::read_to_string(path)
+    let content = std::fs::read_to_string(path)?;
+    Ok(content)
 }
 
 pub fn load_resource_bytes(relative_path: &str) -> Result<Vec<u8>> {
     let path = get_resource_path(relative_path);
-    std::fs::read(path)
+    let bytes = std::fs::read(path)?;
+    Ok(bytes)
 }
 
 pub fn load_resource_json<T: serde::de::DeserializeOwned>(relative_path: &str) -> Result<T> {
@@ -31,12 +33,14 @@ pub fn load_resource_json<T: serde::de::DeserializeOwned>(relative_path: &str) -
 
 pub fn save_resource_string(relative_path: &str, data: &str) -> Result<()> {
     let path = get_resource_path(relative_path);
-    std::fs::write(path, data)
+    std::fs::write(path, data)?;
+    Ok(())
 }
 
 pub fn save_resource_bytes(relative_path: &str, data: &[u8]) -> Result<()> {
     let path = get_resource_path(relative_path);
-    std::fs::write(path, data)
+    std::fs::write(path, data)?;
+    Ok(())
 }
 
 pub fn save_resource_json<T: serde::ser::Serialize>(relative_path: &str, data: &T) -> Result<()> {
@@ -71,8 +75,8 @@ pub fn gather_dir<T>(
         if let Some(result) = filter_map(&file) {
             let file_extension = file.extension().and_then(|s| s.to_str()).unwrap_or("");
 
-            let relative_dir = path
-                .strip_prefix(dir)
+            let relative_dir = file
+                .strip_prefix(&path)
                 .unwrap()
                 .to_str()
                 .unwrap()

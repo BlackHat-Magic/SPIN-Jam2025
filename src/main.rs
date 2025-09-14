@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use std::sync::mpsc::{Sender, channel};
 use winit::{
     application::ApplicationHandler,
     event::WindowEvent,
@@ -7,89 +8,76 @@ use winit::{
     window::{Window, WindowId},
 };
 
+pub use ecs::*;
+
 pub mod render;
 pub mod utils;
+mod input;
+use input::Input;
 
-pub use ecs::*;
 use render::Gpu;
 pub use utils::*;
 
-#[derive(Default)]
-struct App {
-    state: Option<Gpu>,
-}
-
-impl ApplicationHandler for App {
-    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        let window = Arc::new(
-            event_loop
-                .create_window(Window::default_attributes())
-                .unwrap(),
-        );
-
-        let state = pollster::block_on(Gpu::new(window.clone()));
-        self.state = Some(state);
-
-        window.request_redraw();
-    }
-
-    fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
-        let state = self.state.as_mut().unwrap();
-        match event {
-            WindowEvent::CloseRequested => {
-                println!("The close button was pressed; stopping");
-                event_loop.exit();
-            }
-            WindowEvent::RedrawRequested => {
-                state.render();
-                state.get_window().request_redraw();
-            }
-            WindowEvent::Resized(size) => {
-                state.resize(size);
-            }
-            _ => (),
-        }
-    }
-}
-
 fn main() {
-    env_logger::init();
+    let mut app = App::new();
 
-    let event_loop = EventLoop::new().unwrap();
+    app.add_system(init_window, SystemStage::Init);
+    app.add_system(input::input_system, SystemStage::Update);
 
-    event_loop.set_control_flow(ControlFlow::Poll);
-
-    let mut app = App::default();
-    event_loop.run_app(&mut app).unwrap();
-
-    let _ = my_system;
+    app.run();
 }
 
-#[derive(Component)]
-struct Transform {
-    position: f32,
-}
-
-#[derive(Component)]
-struct Velocity(f32);
-
-#[derive(Resource)]
-struct Time {
-    delta_seconds: f32,
-}
-
-ecs::system!(
-    fn my_system(
-        query: query (&mut Transform, &Velocity),
-        time: res &Time,
+system!(
+    fn init_window(
+        commands: commands
     ) {
-        if time.is_none() {
-            return;
-        }
-        let time = time.unwrap();
+        use winit::platform::x11::EventLoopBuilderExtX11;
 
-        for (transform, velocity) in query {
-            transform.position += velocity.0 * time.delta_seconds;
+        struct App {
+            tx_event: Sender<WindowEvent>,
+            tx_window: Sender<Window>,
         }
+
+        impl ApplicationHandler for App {
+            fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+                let window =
+                    event_loop
+                        .create_window(Window::default_attributes())
+                        .unwrap();
+
+                self.tx_window.send(window).unwrap();
+            }
+
+            fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
+                match event {
+                    WindowEvent::CloseRequested => {
+                        event_loop.exit();
+                    }
+                    _ => (),
+                }
+
+                self.tx_event.send(event).unwrap();
+            }
+        }
+
+        let (tx_event, rx_event) = channel();
+        commands.insert_resource(Input::new(rx_event));
+        
+        let (tx_window, rx_window) = channel();
+        let app = App { tx_event, tx_window };
+
+        std::thread::spawn(move || {
+            let event_loop = EventLoop::builder().with_any_thread(true).build().expect("Failed to create event loop");
+            event_loop.set_control_flow(ControlFlow::Wait);
+
+            let mut app = app;
+            event_loop.run_app(&mut app).expect("Failed to run event loop");
+        });
+
+        let window = Arc::new(rx_window.recv().unwrap());
+        let mut gpu = pollster::block_on(Gpu::new(window.clone()));
+        gpu.render();
+
+        commands.insert_resource(gpu);
     }
 );

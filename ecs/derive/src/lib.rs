@@ -93,7 +93,7 @@ pub fn system(item: TokenStream) -> TokenStream {
     let mut shared_resources = Vec::new();
     let mut mutable_resources = Vec::new();
 
-    let arg_gather_tokens = generate_arg_gather(
+    let (arg_gather_tokens, runs_alone) = generate_arg_gather(
         args,
         &mut shared_components,
         &mut mutable_components,
@@ -104,11 +104,13 @@ pub fn system(item: TokenStream) -> TokenStream {
     let component_access = component_access(&shared_components, &mutable_components);
     let resource_access = resource_access(&shared_resources, &mutable_resources);
 
+    let last_run_ident = quote::format_ident!("LAST_RUN{}", fn_name.to_string().to_uppercase());
+
     let expanded = quote! {
         #[allow(non_camel_case_types)]
         pub struct #fn_name;
 
-        static LAST_RUN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        static #last_run_ident: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
         impl System for #fn_name {
             unsafe fn run_unsafe(&mut self, world: *mut World) {
@@ -137,11 +139,15 @@ pub fn system(item: TokenStream) -> TokenStream {
             }
 
             fn get_last_run(&self) -> Tick {
-                LAST_RUN.load(std::sync::atomic::Ordering::SeqCst)
+                #last_run_ident.load(std::sync::atomic::Ordering::SeqCst)
             }
 
             fn set_last_run(&mut self, tick: Tick) {
-                LAST_RUN.store(tick, std::sync::atomic::Ordering::SeqCst);
+                #last_run_ident.store(tick, std::sync::atomic::Ordering::SeqCst);
+            }
+
+            fn runs_alone(&self) -> bool {
+                #runs_alone
             }
         }
     };
@@ -226,9 +232,11 @@ fn generate_arg_gather(
     mutable_components: &mut Vec<Ident>,
     shared_resources: &mut Vec<Ident>,
     mutable_resources: &mut Vec<Ident>,
-) -> TokenStream2 {
+) -> (TokenStream2, bool) {
     let mut arg_gather = Vec::new();
     let mut arg_iter = args.into_iter().peekable();
+    let mut runs_alone = false;
+
     while let Some(tt) = arg_iter.next() {
         if let TokenTree::Ident(arg_name) = &tt {
             if let Some(TokenTree::Punct(p)) = arg_iter.peek() {
@@ -254,6 +262,16 @@ fn generate_arg_gather(
                             ) {
                                 arg_gather.push(gather_code);
                             }
+                        } else if ty_str == "commands" {
+                            if runs_alone {
+                                panic!("commands can only be specified once");
+                            }
+                            runs_alone = true;
+                            arg_gather.push(quote! {
+                                let mut #arg_name = Commands::new(world);
+                            });
+                        } else {
+                            panic!("Unknown argument type: {}", ty_str);
                         }
                     }
                 }
@@ -261,7 +279,7 @@ fn generate_arg_gather(
         }
     }
 
-    quote! { #(#arg_gather)* }
+    (quote! { #(#arg_gather)* }, runs_alone)
 }
 
 fn handle_query(
@@ -367,9 +385,7 @@ fn handle_query(
                 .push(quote! { if ids[#i] < max_id { #curr_name = #iter_name.next(); } });
         }
 
-        let somes = curr_list
-            .iter()
-            .map(|c| quote! { #c.is_some() });
+        let somes = curr_list.iter().map(|c| quote! { #c.is_some() });
 
         gather_code.extend(quote! {
             while #(#somes) && * {

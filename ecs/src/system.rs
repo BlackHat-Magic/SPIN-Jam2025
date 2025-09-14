@@ -7,6 +7,7 @@ pub enum SystemRunCriteria {
     OnChannelReceive(String),
 }
 
+#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
 pub enum SystemStage {
     Init,
     PreUpdate,
@@ -31,6 +32,7 @@ pub trait System: Send + Sync + 'static {
     fn resource_access(&self) -> &'static ResourceAccess;
     fn get_last_run(&self) -> Tick;
     fn set_last_run(&mut self, tick: Tick);
+    fn runs_alone(&self) -> bool;
 
     unsafe fn run_unsafe(&mut self, world: *mut World);
 }
