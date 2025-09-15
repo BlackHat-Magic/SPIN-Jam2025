@@ -22,10 +22,12 @@ fn main() {
     let mut app = App::new();
 
     app.add_system(init_window, SystemStage::Init);
-    app.add_system(input::input_system, SystemStage::Update);
+    app.add_system(input::input_system, SystemStage::PreUpdate);
+    app.add_system(render::render_system, SystemStage::Render);
 
     app.run();
 }
+
 
 system!(
     fn init_window(
@@ -75,8 +77,7 @@ system!(
         });
 
         let window = Arc::new(rx_window.recv().unwrap());
-        let mut gpu = pollster::block_on(Gpu::new(window.clone()));
-        gpu.render();
+        let gpu = pollster::block_on(Gpu::new(window.clone()));
 
         commands.insert_resource(gpu);
     }

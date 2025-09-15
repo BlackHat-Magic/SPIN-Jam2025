@@ -18,6 +18,48 @@ impl PalleteSwap {
         Self { from, to }
     }
 
+    fn parse_color(s: &str) -> Option<Rgba<u8>> {
+        let s = s.trim_start_matches('#');
+        if s.len() != 6 && s.len() != 8 {
+            return None;
+        }
+        let r = u8::from_str_radix(&s[0..2], 16).ok()?;
+        let g = u8::from_str_radix(&s[2..4], 16).ok()?;
+        let b = u8::from_str_radix(&s[4..6], 16).ok()?;
+        let a = if s.len() == 8 {
+            u8::from_str_radix(&s[6..8], 16).ok()?
+        } else {
+            255
+        };
+        Some(Rgba([r, g, b, a]))
+    }
+
+    pub fn load(contents: &str) -> Self {
+        let mut from = Vec::new();
+        let mut to = Vec::new();
+
+        for line in contents.lines() {
+            if line.trim().is_empty() || line.trim_start().starts_with("//") {
+                continue;
+            }
+
+            let parts: Vec<&str> = line.split("->").map(|s| s.trim()).collect();
+            if parts.len() != 2 {
+                eprintln!("Invalid pallete swap line: {}", line);
+                continue;
+            }
+
+            if let (Some(f), Some(t)) = (Self::parse_color(parts[0]), Self::parse_color(parts[1])) {
+                from.push(f);
+                to.push(t);
+            } else {
+                eprintln!("Invalid color in pallete swap: {}", line);
+            }
+        }
+
+        Self { from, to }
+    }
+
     pub fn apply(&self, image: &mut ImageBuffer<Rgba<u8>, Vec<u8>>) {
         for pixel in image.pixels_mut() {
             for (i, from_color) in self.from.iter().enumerate() {

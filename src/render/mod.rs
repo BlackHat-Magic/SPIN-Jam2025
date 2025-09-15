@@ -149,20 +149,73 @@ impl Gpu {
         self.configure_surface();
     }
 
-    // Will be refactored later to be compatible with the ECS system
-    pub fn render(&mut self) {
-        let surface_texture = self
+    pub fn display(
+        &mut self,
+        item: &dyn Displayable,
+        location: (f32, f32),
+        scale: (f32, f32),
+        depth: f32,
+        align: Align,
+    ) {
+        let (texture, size) = item.get_texture_and_size();
+        let size = (size.width as f32 * scale.0, size.height as f32 * scale.1);
+
+        let (x, y) = match align {
+            Align::TopLeft => (location.0, location.1),
+            Align::TopCenter => (location.0 - size.0 / 2.0, location.1),
+            Align::TopRight => (location.0 - size.0, location.1),
+            Align::CenterLeft => (location.0, location.1 - size.1 / 2.0),
+            Align::Center => (location.0 - size.0 / 2.0, location.1 - size.1 / 2.0),
+            Align::CenterRight => (location.0 - size.0, location.1 - size.1 / 2.0),
+            Align::BottomLeft => (location.0, location.1 - size.1),
+            Align::BottomCenter => (location.0 - size.0 / 2.0, location.1 - size.1),
+            Align::BottomRight => (location.0 - size.0, location.1 - size.1),
+        };
+
+        let rect = (x, y, size.0, size.1);
+
+        let quad = Quad {
+            texture: Rc::new(texture.clone()),
+            rect,
+            depth,
+        };
+        self.insert_quad(quad);
+    }
+
+    fn insert_quad(&mut self, quad: Quad) {
+        let pos = self
+            .quads
+            .binary_search_by(|q| q.depth.partial_cmp(&quad.depth).unwrap());
+        let pos = match pos {
+            Ok(pos) => pos,
+            Err(pos) => pos,
+        };
+        self.quads.insert(pos, quad);
+    }
+}
+
+static mut IHADG: i32 = 0;
+
+system!(
+    fn render_system(
+        gpu: res &mut Gpu,
+    ) {
+        let Some(gpu) = gpu else {
+            return;
+        };
+
+        let surface_texture = gpu
             .surface
             .get_current_texture()
             .expect("failed to acquire next swapchain texture");
         let texture_view = surface_texture
             .texture
             .create_view(&wgpu::TextureViewDescriptor {
-                format: Some(self.surface_format.add_srgb_suffix()),
+                format: Some(gpu.surface_format.add_srgb_suffix()),
                 ..Default::default()
             });
 
-        let mut encoder = self.device.create_command_encoder(&Default::default());
+        let mut encoder = gpu.device.create_command_encoder(&Default::default());
 
         let renderpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
@@ -171,7 +224,11 @@ impl Gpu {
                 depth_slice: None,
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
+                    load: wgpu::LoadOp::Clear(if unsafe { IHADG > 0 } {
+                        wgpu::Color::GREEN
+                    } else {
+                        wgpu::Color::BLACK
+                    }),
                     store: wgpu::StoreOp::Store,
                 },
             })],
@@ -180,9 +237,16 @@ impl Gpu {
             occlusion_query_set: None,
         });
 
+        unsafe {
+            IHADG += 1;
+            if IHADG > 100 {
+                IHADG = -100;
+            }
+        }
+
         drop(renderpass);
 
-        let index_buffer = self
+        let index_buffer = gpu
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("Quad Index Buffer"),
@@ -190,10 +254,10 @@ impl Gpu {
                 usage: wgpu::BufferUsages::INDEX,
             });
 
-        self.quads.iter().for_each(|quad| {
+        gpu.quads.iter().for_each(|quad| {
             // Draw each quad
             let texture_view = quad.texture.create_view(&Default::default());
-            let buffer = self
+            let buffer = gpu
                 .device
                 .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                     label: Some("Quad Vertex Buffer"),
@@ -248,54 +312,10 @@ impl Gpu {
             drop(renderpass);
         });
 
-        self.queue.submit([encoder.finish()]);
-        self.window.pre_present_notify();
+        gpu.queue.submit([encoder.finish()]);
+        gpu.window.pre_present_notify();
         surface_texture.present();
 
-        self.quads.clear();
+        gpu.quads.clear();
     }
-
-    pub fn display(
-        &mut self,
-        item: &dyn Displayable,
-        location: (f32, f32),
-        scale: (f32, f32),
-        depth: f32,
-        align: Align,
-    ) {
-        let (texture, size) = item.get_texture_and_size();
-        let size = (size.width as f32 * scale.0, size.height as f32 * scale.1);
-
-        let (x, y) = match align {
-            Align::TopLeft => (location.0, location.1),
-            Align::TopCenter => (location.0 - size.0 / 2.0, location.1),
-            Align::TopRight => (location.0 - size.0, location.1),
-            Align::CenterLeft => (location.0, location.1 - size.1 / 2.0),
-            Align::Center => (location.0 - size.0 / 2.0, location.1 - size.1 / 2.0),
-            Align::CenterRight => (location.0 - size.0, location.1 - size.1 / 2.0),
-            Align::BottomLeft => (location.0, location.1 - size.1),
-            Align::BottomCenter => (location.0 - size.0 / 2.0, location.1 - size.1),
-            Align::BottomRight => (location.0 - size.0, location.1 - size.1),
-        };
-
-        let rect = (x, y, size.0, size.1);
-
-        let quad = Quad {
-            texture: Rc::new(texture.clone()),
-            rect,
-            depth,
-        };
-        self.insert_quad(quad);
-    }
-
-    fn insert_quad(&mut self, quad: Quad) {
-        let pos = self
-            .quads
-            .binary_search_by(|q| q.depth.partial_cmp(&quad.depth).unwrap());
-        let pos = match pos {
-            Ok(pos) => pos,
-            Err(pos) => pos,
-        };
-        self.quads.insert(pos, quad);
-    }
-}
+);

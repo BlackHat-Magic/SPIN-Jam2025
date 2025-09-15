@@ -6,12 +6,18 @@ use crate::*;
 system!(
     fn input_system(
         input: res &mut Input,
+        gpu: res &mut Gpu,
         commands: commands
     ) {
-        if let Some(input) = input {
-            if input.update() {
-                commands.exit();
-            }
+        let Some(input) = input else {
+            return;
+        };
+        let Some(gpu) = gpu else {
+            return;
+        };
+
+        if input.update(gpu) {
+            commands.exit();
         }
     }
 );
@@ -27,7 +33,7 @@ impl Input {
         Self { rx, keys: HashMap::new() }
     }
 
-    pub fn update(&mut self) -> bool {
+    pub fn update(&mut self, gpu: &mut Gpu) -> bool {
         let mut exit = false;
 
         while let Ok(event) = self.rx.try_recv() {
@@ -40,6 +46,9 @@ impl Input {
                         }
                         _ => {}
                     }
+                }
+                WindowEvent::Resized(physical_size) => {
+                    gpu.resize(physical_size);
                 }
                 WindowEvent::CloseRequested => {
                     exit = true;

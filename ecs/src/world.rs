@@ -114,9 +114,10 @@ impl Commands {
     pub fn add_system(&mut self, system: impl System, stage: SystemStage) {
         unsafe {
             let world = self.world.as_mut().unwrap();
-            world.systems.push((stage, Box::new(system)));
+            let system = Box::into_raw(Box::new(system));
+            world.systems.push((stage, system));
 
-            // TODO: get it scheduled
+            world.scheduler.as_mut().unwrap().add_system(system, stage);
         }
     }
 
@@ -166,7 +167,7 @@ impl Commands {
 pub struct World {
     pub(crate) entities: Vec<Entity>,
     pub(crate) resources: Vec<Option<Box<dyn Resource>>>,
-    pub(crate) systems: Vec<(SystemStage, Box<dyn System>)>,
+    pub(crate) systems: Vec<(SystemStage, *mut dyn System)>,
     pub(crate) tick: Tick,
     pub(crate) next_entity_id: u32,
     pub(crate) scheduler: *mut Scheduler,

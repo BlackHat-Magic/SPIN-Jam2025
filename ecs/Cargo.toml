@@ -8,3 +8,4 @@ derive = { path = "derive" }
 inventory = "0.3.21"
 typeid = "1.0.3"
 lazy_static = "1.5.0"
+rayon = "1.11.0"

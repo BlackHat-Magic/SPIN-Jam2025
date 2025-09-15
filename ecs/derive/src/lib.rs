@@ -68,18 +68,19 @@ pub fn derive_resource(input: TokenStream) -> TokenStream {
 /**
  * Systems look like
  *
- * ```ignore
- * #[system]
- * fn my_system(
- *    query: query (&mut Transform, &Velocity),
- *    time: res &Time,
- * ) {
- *    // query is of type Vec<(&mut Transform, &Velocity)>
- *    // time is of type Option<&Time>
- *    for (transform, velocity) in query.iter() {
- *        transform.position += velocity.0 * time.delta_seconds;
- *    }
- * }
+ * ```
+ * system!(
+ *  fn my_system(
+ *      query: query (&mut Transform, &Velocity),
+ *      time: res &Time,
+ *  ) {
+ *      // query is impl Iterator<(&mut Transform, &Velocity)>
+ *      // time is Option<&Time>
+ *      for (transform, velocity) in query {
+ *          transform.position += velocity.0 * time.delta_seconds;
+ *      }
+ *  }
+ * )
  * ```
  */
 #[proc_macro]
