@@ -22,6 +22,8 @@ fn main() {
 
     app.add_system(input::input_system, SystemStage::PreUpdate);
     app.add_system(render::render_system, SystemStage::Render);
+    app.add_system(render::init_shaders, SystemStage::Init);
+    app.add_system(render::init_models, SystemStage::Init);
 
     struct WinitApp {
         app: App,

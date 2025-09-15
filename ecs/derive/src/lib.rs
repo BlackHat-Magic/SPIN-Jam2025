@@ -109,7 +109,7 @@ pub fn system(item: TokenStream) -> TokenStream {
         .chain(shared_resources.iter())
         .chain(mutable_resources.iter())
         .collect::<Vec<_>>();
-    let last_run_ident = quote::format_ident!("LAST_RUN{}", fn_name.to_string().to_uppercase());
+    let last_run_ident = quote::format_ident!("LAST_RUN_{}", fn_name.to_string().to_uppercase());
 
     let expanded = quote! {
         #[allow(non_camel_case_types)]

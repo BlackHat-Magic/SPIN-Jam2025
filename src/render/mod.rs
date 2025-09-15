@@ -1,6 +1,9 @@
 pub mod sprite;
+pub mod model;
 
 use crate::*;
+
+use model::Model;
 
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -50,9 +53,88 @@ pub struct Gpu {
     pub surface: wgpu::Surface<'static>,
     pub surface_format: wgpu::TextureFormat,
 
-    pub shaders: HashMap<String, wgpu::ShaderModule>,
     pub quads: Vec<Quad>,
 }
+
+#[derive(Resource)]
+pub struct Shaders {
+    pub shaders: HashMap<String, wgpu::ShaderModule>,
+}
+
+impl Shaders {
+    pub fn load(gpu: &Gpu) -> Self {
+        let shaders = crate::gather_dir("shaders", |path| {
+            let file_extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
+
+            let shader = match file_extension {
+                #[cfg(debug_assertions)]
+                "wgsl" => gpu.device.create_shader_module(wgpu::ShaderModuleDescriptor {
+                    label: path.to_str(),
+                    source: wgpu::ShaderSource::Wgsl(
+                        std::fs::read_to_string(&path)
+                            .expect("Failed to read shader file")
+                            .into(),
+                    ),
+                }),
+                #[cfg(not(debug_assertions))]
+                "spv" => {
+                    let shader_data: Vec<u8> =
+                        std::fs::read(&path).expect("Failed to read shader file");
+                    let source = wgpu::util::make_spirv(&shader_data);
+
+                    gpu.device.create_shader_module(wgpu::ShaderModuleDescriptor {
+                        label: path.to_str(),
+                        source,
+                    })
+                }
+                _ => {
+                    println!(
+                        "Warning: Unsupported shader file extension: .{} at {:?}",
+                        file_extension, path
+                    );
+                    return None;
+                }
+            };
+
+            Some(shader)
+        }).unwrap();
+
+        Self { shaders }
+    }
+}
+
+system!(
+    fn init_shaders(
+        gpu: res &Gpu,
+        commands: commands
+    ) {
+        let shaders = Shaders::load(gpu.unwrap());
+        commands.insert_resource(shaders);
+    }
+);
+
+#[derive(Resource)]
+pub struct Models {
+    pub models: HashMap<String, Model>,
+}
+
+impl Models {
+    pub fn load(gpu: &Gpu) -> Self {
+        let models = crate::gather_dir("models", |path| Model::load(path, gpu)).unwrap();
+
+        Self { models }
+    }
+}
+
+system!(
+    fn init_models(
+        gpu: res &Gpu,
+        commands: commands,
+    ) {
+        let models = Models::load(gpu.unwrap());
+        commands.insert_resource(models);
+    }
+);
 
 impl Gpu {
     pub async fn new(window: Arc<Window>) -> Self {
@@ -72,42 +154,6 @@ impl Gpu {
         let cap = surface.get_capabilities(&adapter);
         let surface_format = cap.formats[0];
 
-        let shaders = crate::gather_dir("shaders", |path| {
-            let file_extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
-
-            let shader = match file_extension {
-                #[cfg(debug_assertions)]
-                "wgsl" => device.create_shader_module(wgpu::ShaderModuleDescriptor {
-                    label: path.to_str(),
-                    source: wgpu::ShaderSource::Wgsl(
-                        std::fs::read_to_string(&path)
-                            .expect("Failed to read shader file")
-                            .into(),
-                    ),
-                }),
-                #[cfg(not(debug_assertions))]
-                "spv" => {
-                    let shader_data: Vec<u8> =
-                        std::fs::read(&path).expect("Failed to read shader file");
-                    let source = wgpu::util::make_spirv(&shader_data);
-
-                    device.create_shader_module(wgpu::ShaderModuleDescriptor {
-                        label: path.to_str(),
-                        source,
-                    })
-                }
-                _ => {
-                    println!(
-                        "Warning: Unsupported shader file extension: .{} at {:?}",
-                        file_extension, path
-                    );
-                    return None;
-                }
-            };
-
-            Some(shader)
-        }).unwrap();
-
         let state = Self {
             window,
             device,
@@ -116,7 +162,6 @@ impl Gpu {
             surface,
             surface_format,
 
-            shaders,
             quads: Vec::new(),
         };
 
