@@ -43,6 +43,13 @@ impl Scheduler {
                 return;
             };
             for group in systems {
+                if group.len() == 1 {
+                    // Run single systems on main thread in case they aren't Send + Sync
+                    let system = group[0];
+                    system.as_mut().unwrap().run_unsafe(world);
+                    continue;
+                }
+
                 let group: Vec<SystemWrapper> = group.iter().map(|&s| SystemWrapper(s)).collect();
                 let world = WorldWrapper(world);
 
@@ -60,32 +67,34 @@ impl Scheduler {
 
     pub fn add_system(&mut self, system: *mut dyn System, stage: SystemStage) {
         let entry = self.systems.entry(stage).or_insert_with(Vec::new);
-        if entry.is_empty() {
+        if unsafe { system.as_ref() }.unwrap().runs_alone() || entry.is_empty() {
             entry.push(vec![system]);
-        } else {
-            for group in entry.iter_mut() {
-                let mut overlap = false;
-                for &existing_system in group.iter() {
-                    let existing_component_access = unsafe { (*existing_system).component_access() };
-                    let new_component_access = unsafe { (*system).component_access() };
-                    if existing_component_access.overlaps(&new_component_access) {
-                        overlap = true;
-                        break;
-                    }
+            return;
+        }
 
-                    let existing_resource_access = unsafe { (*existing_system).resource_access() };
-                    let new_resource_access = unsafe { (*system).resource_access() };
-                    if existing_resource_access.overlaps(&new_resource_access) {
-                        overlap = true;
-                        break;
-                    }
+        for group in entry.iter_mut() {
+            let mut overlap = false;
+            for &existing_system in group.iter() {
+                let existing_component_access = unsafe { (*existing_system).component_access() };
+                let new_component_access = unsafe { (*system).component_access() };
+                if existing_component_access.overlaps(&new_component_access) {
+                    overlap = true;
+                    break;
                 }
-                if !overlap {
-                    group.push(system);
-                    return;
+
+                let existing_resource_access = unsafe { (*existing_system).resource_access() };
+                let new_resource_access = unsafe { (*system).resource_access() };
+                if existing_resource_access.overlaps(&new_resource_access) {
+                    overlap = true;
+                    break;
                 }
             }
-            entry[0].push(system);
+            if !overlap {
+                group.push(system);
+                return;
+            }
         }
+
+        entry.push(vec![system]);
     }
 }

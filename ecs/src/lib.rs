@@ -1,3 +1,6 @@
+#![allow(incomplete_features)]
+#![feature(specialization)]
+
 pub mod scheduler;
 pub mod system;
 pub mod world;
@@ -16,6 +19,22 @@ pub use system::*;
 pub use world::*;
 
 pub use lazy_static::lazy_static;
+
+pub trait SendSyncCheck {
+    fn is_not_send_sync() -> bool;
+}
+
+impl<T: Send + Sync + Any> SendSyncCheck for T {
+    fn is_not_send_sync() -> bool {
+        false
+    }
+}
+
+impl<T: Any> SendSyncCheck for T {
+    default fn is_not_send_sync() -> bool {
+        true
+    }
+}
 
 pub trait Component: Any {
     fn get_type_id(&self) -> usize;

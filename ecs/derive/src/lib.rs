@@ -105,6 +105,10 @@ pub fn system(item: TokenStream) -> TokenStream {
     let component_access = component_access(&shared_components, &mutable_components);
     let resource_access = resource_access(&shared_resources, &mutable_resources);
 
+    let all_send_sync = shared_components.iter().chain(mutable_components.iter())
+        .chain(shared_resources.iter())
+        .chain(mutable_resources.iter())
+        .collect::<Vec<_>>();
     let last_run_ident = quote::format_ident!("LAST_RUN{}", fn_name.to_string().to_uppercase());
 
     let expanded = quote! {
@@ -148,7 +152,7 @@ pub fn system(item: TokenStream) -> TokenStream {
             }
 
             fn runs_alone(&self) -> bool {
-                #runs_alone
+                #runs_alone #(|| #all_send_sync::is_not_send_sync())*
             }
         }
     };
