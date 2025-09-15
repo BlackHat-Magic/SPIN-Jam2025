@@ -1,14 +1,29 @@
-use std::{collections::HashMap, sync::mpsc::Receiver};
+use std::collections::HashMap;
 use winit::{event::WindowEvent, keyboard::{KeyCode, PhysicalKey}};
 
 use crate::*;
+
+#[derive(Resource)]
+pub struct WindowEvents {
+    pub events: Option<WindowEvent>,
+}
+
+impl WindowEvents {
+    pub fn new(events: Option<WindowEvent>) -> Self {
+        Self { events }
+    }
+}
 
 system!(
     fn input_system(
         input: res &mut Input,
         gpu: res &mut Gpu,
-        commands: commands
+        events: res &mut WindowEvents,
+        commands: commands,
     ) {
+        let Some(events) = events else {
+            return;
+        };
         let Some(input) = input else {
             return;
         };
@@ -16,7 +31,7 @@ system!(
             return;
         };
 
-        if input.update(gpu) {
+        if input.update(gpu, events) {
             commands.exit();
         }
     }
@@ -24,19 +39,18 @@ system!(
 
 #[derive(Resource)]
 pub struct Input {
-    rx: Receiver<WindowEvent>,
     keys: HashMap<KeyCode, bool>,
 }
 
 impl Input {
-    pub fn new(rx: Receiver<WindowEvent>) -> Self {
-        Self { rx, keys: HashMap::new() }
+    pub fn new() -> Self {
+        Self { keys: HashMap::new() }
     }
 
-    pub fn update(&mut self, gpu: &mut Gpu) -> bool {
+    pub fn update(&mut self, gpu: &mut Gpu, events: &mut WindowEvents) -> bool {
         let mut exit = false;
 
-        while let Ok(event) = self.rx.try_recv() {
+        if let Some(event) = events.events.take() {
             match event {
                 WindowEvent::KeyboardInput { event, .. } => {
                     match event.physical_key {

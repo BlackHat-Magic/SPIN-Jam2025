@@ -317,5 +317,6 @@ system!(
         surface_texture.present();
 
         gpu.quads.clear();
+        gpu.window.request_redraw();
     }
 );

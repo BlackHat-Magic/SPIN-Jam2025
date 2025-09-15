@@ -33,25 +33,26 @@ impl App {
         }
     }
 
-    pub fn run(&mut self) {
+    pub fn init(&mut self) {
         unsafe {
             let world = self.commands.world;
             let scheduler = (*world).scheduler;
 
             Scheduler::run(scheduler, SystemStage::Init);
+        }
+    }
 
-            loop {
-                (*world).tick += 1;
+    pub fn run(&mut self) {
+        unsafe {
+            let world = self.commands.world;
+            let scheduler = (*world).scheduler;
 
-                Scheduler::run(scheduler, SystemStage::PreUpdate);
-                Scheduler::run(scheduler, SystemStage::Update);
-                Scheduler::run(scheduler, SystemStage::PostUpdate);
-                Scheduler::run(scheduler, SystemStage::Render);
+            (*world).tick += 1;
 
-                if self.should_exit() {
-                    break;
-                }
-            }
+            Scheduler::run(scheduler, SystemStage::PreUpdate);
+            Scheduler::run(scheduler, SystemStage::Update);
+            Scheduler::run(scheduler, SystemStage::PostUpdate);
+            Scheduler::run(scheduler, SystemStage::Render);
         }
     }
 }
@@ -65,7 +66,7 @@ impl Drop for App {
 }
 
 pub struct Commands {
-    pub(crate) world: *mut World,
+    pub world: *mut World,
 }
 
 pub type EntityId = u32;
@@ -106,6 +107,7 @@ impl Commands {
                 world.resources[id] = Some(Box::new(resource));
                 Some(())
             } else {
+                world.resources[id] = Some(Box::new(resource));
                 None
             }
         }
