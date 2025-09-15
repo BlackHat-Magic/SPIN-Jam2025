@@ -73,6 +73,9 @@ impl Scheduler {
         }
 
         for group in entry.iter_mut() {
+            if unsafe { group[0].as_ref() }.unwrap().runs_alone() {
+                continue;
+            }
             let mut overlap = false;
             for &existing_system in group.iter() {
                 let existing_component_access = unsafe { (*existing_system).component_access() };
