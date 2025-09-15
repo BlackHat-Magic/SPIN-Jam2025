@@ -44,7 +44,7 @@ impl Scheduler {
             };
             for group in systems {
                 if group.len() == 1 {
-                    // Run single systems on main thread in case they aren't Send + Sync
+                    // Run single systems on main thread because they might not be Send + Sync
                     let system = group[0];
                     system.as_mut().unwrap().run_unsafe(world);
                     continue;
