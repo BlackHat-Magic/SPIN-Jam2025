@@ -31,10 +31,14 @@ fn main() {
 
     impl ApplicationHandler for WinitApp {
         fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-            let window =
-                event_loop
-                    .create_window(Window::default_attributes())
-                    .unwrap();
+            let window_attributes = Window::default_attributes()
+                .with_title("Klaus of Death")
+                .with_visible(true)
+                .with_inner_size(winit::dpi::LogicalSize::new(800, 600))
+                .with_position(winit::dpi::LogicalPosition::new(100, 100));
+            let window = event_loop
+                .create_window(window_attributes)
+                .unwrap();
 
             let gpu = pollster::block_on(Gpu::new(Arc::new(window)));
             self.app.insert_resource(gpu);
@@ -46,12 +50,19 @@ fn main() {
             match event {
                 WindowEvent::CloseRequested => {
                     event_loop.exit();
+                    self.app.de_init();
                 }
-                _ => (),
+                _ => {
+                    let window_events = input::WindowEvents::new(Some(event));
+                    self.app.insert_resource(window_events);
+                    self.app.run();
+                }
             }
+        }
 
-            let window_events = input::WindowEvents::new(Some(event));
-            self.app.insert_resource(window_events);
+        fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
+            // Request a redraw to keep the render loop going
+            // We can't easily access the window here, so let's just run the app
             self.app.run();
         }
     }

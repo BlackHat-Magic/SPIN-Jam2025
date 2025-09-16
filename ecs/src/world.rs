@@ -42,6 +42,15 @@ impl App {
         }
     }
 
+    pub fn de_init(&mut self) {
+        unsafe {
+            let world = self.commands.world;
+            let scheduler = (*world).scheduler;
+
+            Scheduler::run(scheduler, SystemStage::DeInit);
+        }
+    }
+
     pub fn run(&mut self) {
         unsafe {
             let world = self.commands.world;
@@ -155,13 +164,6 @@ impl Commands {
         unsafe {
             let world = self.world.as_ref().unwrap();
             world.should_exit
-        }
-    }
-
-    pub fn exit(&mut self) {
-        unsafe {
-            let world = self.world.as_mut().unwrap();
-            world.should_exit = true;
         }
     }
 }

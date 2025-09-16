@@ -14,6 +14,7 @@ pub enum SystemStage {
     Update,
     PostUpdate,
     Render,
+    DeInit,
 }
 
 pub struct ComponentAccess {

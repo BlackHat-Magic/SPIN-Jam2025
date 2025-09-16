@@ -19,7 +19,6 @@ system!(
         input: res &mut Input,
         gpu: res &mut Gpu,
         events: res &mut WindowEvents,
-        commands: commands,
     ) {
         let Some(events) = events else {
             return;
@@ -31,9 +30,7 @@ system!(
             return;
         };
 
-        if input.update(gpu, events) {
-            commands.exit();
-        }
+        input.update(gpu, events);
     }
 );
 

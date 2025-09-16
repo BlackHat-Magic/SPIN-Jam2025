@@ -18,6 +18,7 @@ wgpu = { version = "26.0.1", features = ["spirv"] }
 winit = "0.30.12"
 anyhow = "1.0.99"
 fbxcel-dom = "0.0.10"
+glam = "0.30.5"
 
 [build-dependencies]
 naga = { version = "26.0.0", features = ["wgsl-in", "spv-out"] }
