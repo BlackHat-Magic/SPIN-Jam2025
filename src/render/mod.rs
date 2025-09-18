@@ -15,33 +15,6 @@ use winit::window::Window;
 
 use wgpu::util::DeviceExt;
 
-fn look_at_rh(eye: [f32; 3], center: [f32; 3], up: [f32; 3]) -> [[f32; 4]; 4] {
-    let eye = glam::Vec3::from(eye);
-    let center = glam::Vec3::from(center);
-    let up = glam::Vec3::from(up);
-
-    let f = (center - eye).normalize();
-    let s = f.cross(up).normalize();
-    let u = s.cross(f);
-
-    [
-        [s.x, u.x, -f.x, 0.0],
-        [s.y, u.y, -f.y, 0.0],
-        [s.z, u.z, -f.z, 0.0],
-        [-s.dot(eye), -u.dot(eye), f.dot(eye), 1.0],
-    ]
-}
-
-fn perspective_rh(fovy_radians: f32, aspect: f32, near: f32, far: f32) -> [[f32; 4]; 4] {
-    let f = 1.0 / (fovy_radians / 2.0).tan();
-    [
-        [f / aspect, 0.0, 0.0, 0.0],
-        [0.0, f, 0.0, 0.0],
-        [0.0, 0.0, (far + near) / (near - far), -1.0],
-        [0.0, 0.0, (2.0 * far * near) / (near - far), 0.0],
-    ]
-}
-
 #[derive(Copy, Clone)]
 pub enum Align {
     TopLeft,

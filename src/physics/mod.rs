@@ -1,5 +1,4 @@
 use crate::*;
-use glam::*;
 
 #[derive(Component)]
 pub struct Transform {
