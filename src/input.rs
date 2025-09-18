@@ -1,15 +1,18 @@
 use std::collections::HashMap;
-use winit::{event::WindowEvent, keyboard::{KeyCode, PhysicalKey}};
+use winit::{
+    event::WindowEvent,
+    keyboard::{KeyCode, PhysicalKey},
+};
 
 use crate::*;
 
 #[derive(Resource)]
 pub struct WindowEvents {
-    pub events: Option<WindowEvent>,
+    pub events: Vec<WindowEvent>,
 }
 
 impl WindowEvents {
-    pub fn new(events: Option<WindowEvent>) -> Self {
+    pub fn new(events: Vec<WindowEvent>) -> Self {
         Self { events }
     }
 }
@@ -37,36 +40,103 @@ system!(
 #[derive(Resource)]
 pub struct Input {
     keys: HashMap<KeyCode, bool>,
+    key_just_pressed: HashMap<KeyCode, bool>,
+    mouse_buttons: HashMap<winit::event::MouseButton, bool>,
+    mouse_buttons_just_pressed: HashMap<winit::event::MouseButton, bool>,
+    prev_mouse_pos: (f64, f64),
+    mouse_delta: (f64, f64),
+    cursor_in_window: bool,
+    pub cursor_grabbed: bool,
 }
 
 impl Input {
     pub fn new() -> Self {
-        Self { keys: HashMap::new() }
+        Self {
+            keys: HashMap::new(),
+            key_just_pressed: HashMap::new(),
+            mouse_buttons: HashMap::new(),
+            mouse_buttons_just_pressed: HashMap::new(),
+            prev_mouse_pos: (0.0, 0.0),
+            mouse_delta: (0.0, 0.0),
+            cursor_in_window: false,
+            cursor_grabbed: false,
+        }
     }
 
-    pub fn update(&mut self, gpu: &mut Gpu, events: &mut WindowEvents) -> bool {
-        let mut exit = false;
+    pub fn update(&mut self, gpu: &mut Gpu, events: &mut WindowEvents) {
+        self.key_just_pressed.clear();
+        self.mouse_buttons_just_pressed.clear();
+        let mut mouse_delta = (0.0, 0.0);
 
-        if let Some(event) = events.events.take() {
+        for event in events.events.drain(..) {
             match event {
-                WindowEvent::KeyboardInput { event, .. } => {
-                    match event.physical_key {
-                        PhysicalKey::Code(keycode) => {
-                            let pressed = event.state == winit::event::ElementState::Pressed;
-                            _ = self.keys.insert(keycode, pressed);
-                        }
-                        _ => {}
+                WindowEvent::KeyboardInput { event, .. } => match event.physical_key {
+                    PhysicalKey::Code(keycode) => {
+                        let pressed = event.state == winit::event::ElementState::Pressed;
+                        _ = self.keys.insert(keycode, pressed);
+                        _ = self.key_just_pressed.insert(keycode, pressed);
                     }
+                    _ => {}
+                },
+                WindowEvent::MouseInput { state, button, .. } => {
+                    let pressed = state == winit::event::ElementState::Pressed;
+                    _ = self.mouse_buttons.insert(button, pressed);
+                    _ = self.mouse_buttons_just_pressed.insert(button, pressed);
                 }
                 WindowEvent::Resized(physical_size) => {
                     gpu.resize(physical_size);
                 }
-                WindowEvent::CloseRequested => {
-                    exit = true;
+                WindowEvent::CursorMoved { position, .. } => {
+                    if !self.cursor_in_window {
+                        self.prev_mouse_pos = (position.x, position.y);
+                        self.cursor_in_window = true;
+                    }
+
+                    mouse_delta.0 = position.x - self.prev_mouse_pos.0;
+                    mouse_delta.1 = position.y - self.prev_mouse_pos.1;
+                    self.prev_mouse_pos = (position.x, position.y);
+
+                }
+                WindowEvent::CursorEntered { .. } => {
+                    self.cursor_in_window = false;
                 }
                 _ => {}
             }
         }
-        exit
+
+        if self.cursor_grabbed {
+            let _ = gpu.window.set_cursor_grab(winit::window::CursorGrabMode::Locked);
+            gpu.window.set_cursor_visible(false);
+
+        } else {
+            let _ = gpu.window.set_cursor_grab(winit::window::CursorGrabMode::None);
+            gpu.window.set_cursor_visible(true);
+        }
+
+        self.mouse_delta = mouse_delta;
+    }
+
+    pub fn is_key_pressed(&self, key: KeyCode) -> bool {
+        *self.keys.get(&key).unwrap_or(&false)
+    }
+
+    pub fn is_key_just_pressed(&self, key: KeyCode) -> bool {
+        *self.key_just_pressed.get(&key).unwrap_or(&false)
+    }
+
+    pub fn is_mouse_button_pressed(&self, button: winit::event::MouseButton) -> bool {
+        *self.mouse_buttons.get(&button).unwrap_or(&false)
+    }
+
+    pub fn is_mouse_button_just_pressed(&self, button: winit::event::MouseButton) -> bool {
+        *self.mouse_buttons_just_pressed.get(&button).unwrap_or(&false)
+    }
+
+    pub fn get_mouse_delta(&self) -> (f64, f64) {
+        self.mouse_delta
+    }
+
+    pub fn get_mouse_position(&self) -> (f64, f64) {
+        self.prev_mouse_pos
     }
 }

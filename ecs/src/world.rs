@@ -143,7 +143,10 @@ impl Commands {
         }
     }
 
-    pub fn remove_component<T: Component>(&mut self, entity_id: EntityId) -> Option<Box<dyn Component>> {
+    pub fn remove_component<T: Component>(
+        &mut self,
+        entity_id: EntityId,
+    ) -> Option<Box<dyn Component>> {
         unsafe {
             let world = self.world.as_mut().unwrap();
             if let Some(entity) = world.entities.get_mut(entity_id as usize) {
@@ -153,7 +156,7 @@ impl Commands {
             }
         }
     }
-    
+
     pub fn run_system(&mut self, system: &mut dyn System) {
         unsafe {
             system.run_unsafe(self.world);
@@ -190,7 +193,8 @@ impl Drop for World {
 
 impl World {
     pub fn new() -> Self {
-        let mut resources = Vec::with_capacity(RESOURCE_IDS.get_or_init(crate::build_resource_ids).len());
+        let mut resources =
+            Vec::with_capacity(RESOURCE_IDS.get_or_init(crate::build_resource_ids).len());
         resources.resize_with(RESOURCE_IDS.get().unwrap().len(), || None);
         Self {
             entities: Vec::new(),

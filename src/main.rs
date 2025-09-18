@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use glam::*;
 use winit::{
     application::ApplicationHandler,
     event::WindowEvent,
@@ -9,21 +10,29 @@ use winit::{
 
 pub use ecs::*;
 
+pub mod input;
+pub mod physics;
 pub mod render;
 pub mod utils;
-mod input;
 use input::Input;
 
+pub use physics::*;
 use render::Gpu;
+pub use render::model::ModelHandle;
+pub use utils::time::*;
 pub use utils::*;
 
 fn main() {
     let mut app = App::new();
 
     app.add_system(input::input_system, SystemStage::PreUpdate);
+    app.add_system(update_time, SystemStage::PreUpdate);
+    app.add_system(control_player, SystemStage::Update);
     app.add_system(render::render_system, SystemStage::Render);
+    app.add_system(init_time, SystemStage::Init);
     app.add_system(render::init_shaders, SystemStage::Init);
     app.add_system(render::init_models, SystemStage::Init);
+    app.add_system(init_scene, SystemStage::Init);
 
     struct WinitApp {
         app: App,
@@ -36,44 +45,150 @@ fn main() {
                 .with_visible(true)
                 .with_inner_size(winit::dpi::LogicalSize::new(800, 600))
                 .with_position(winit::dpi::LogicalPosition::new(100, 100));
-            let window = event_loop
-                .create_window(window_attributes)
-                .unwrap();
+            let window = event_loop.create_window(window_attributes).unwrap();
 
             let gpu = pollster::block_on(Gpu::new(Arc::new(window)));
             self.app.insert_resource(gpu);
 
             self.app.init();
+            self.app.run();
         }
 
-        fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
+        fn window_event(
+            &mut self,
+            event_loop: &ActiveEventLoop,
+            _id: WindowId,
+            event: WindowEvent,
+        ) {
             match event {
                 WindowEvent::CloseRequested => {
                     event_loop.exit();
                     self.app.de_init();
                 }
-                _ => {
-                    let window_events = input::WindowEvents::new(Some(event));
-                    self.app.insert_resource(window_events);
+                WindowEvent::RedrawRequested => {
                     self.app.run();
+                }
+                _ => {
+                    let window_events =
+                        World::get_resource_mut::<input::WindowEvents>(self.app.world);
+                    if let Some(window_events) = window_events {
+                        window_events.events.push(event.clone());
+                    }
                 }
             }
         }
 
         fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
-            // Request a redraw to keep the render loop going
-            // We can't easily access the window here, so let's just run the app
             self.app.run();
         }
     }
 
     app.insert_resource(Input::new());
-    
+    app.insert_resource(input::WindowEvents { events: Vec::new() });
+
     let app = WinitApp { app };
 
-    let event_loop = EventLoop::builder().build().expect("Failed to create event loop");
+    let event_loop = EventLoop::builder()
+        .build()
+        .expect("Failed to create event loop");
     event_loop.set_control_flow(ControlFlow::Poll);
 
     let mut app = app;
-    event_loop.run_app(&mut app).expect("Failed to run event loop");
+    event_loop
+        .run_app(&mut app)
+        .expect("Failed to run event loop");
+}
+
+system! {
+    fn init_scene(
+        commands: commands
+    ) {
+        let entity = commands.spawn_entity();
+        commands.add_component(entity, Transform::default());
+        commands.add_component(entity, ModelHandle { path: "sphere".into() });
+
+        let camera_entity = commands.spawn_entity();
+        commands.add_component(camera_entity, Transform {
+            pos: Vec3::new(0.0, 0.0, -5.0),
+            rot: Quat::look_to_rh(Vec3::Z, Vec3::Y),
+            ..Default::default()
+        });
+
+        commands.add_component(camera_entity, Camera::new(
+            45.0_f32.to_radians(),
+            800.0 / 600.0,
+            0.1,
+            100.0,
+        ));
+    }
+}
+
+system! {
+    fn control_player(
+        input: res &mut Input,
+        time: res &Time,
+        player: query (&mut Transform, &Camera),
+    ) {
+        let Some(input) = input else {
+            return;
+        };
+
+        let Some(time) = time else {
+            return;
+        };
+
+        let Some((player_transform, _camera)) = player.next() else {
+            return;
+        };
+
+        if input.is_mouse_button_just_pressed(winit::event::MouseButton::Left) {
+            input.cursor_grabbed = true;
+        }
+
+        if input.is_key_just_pressed(winit::keyboard::KeyCode::Escape) {
+            input.cursor_grabbed = false;
+        }
+
+
+        let forward = player_transform.rot * Vec3::Z;
+        let right = player_transform.rot * -Vec3::X;
+
+        let mut movement = Vec3::ZERO;
+
+        if input.is_key_pressed(winit::keyboard::KeyCode::KeyW) {
+            movement += forward;
+        }
+        if input.is_key_pressed(winit::keyboard::KeyCode::KeyS) {
+            movement -= forward;
+        }
+
+        if input.is_key_pressed(winit::keyboard::KeyCode::KeyA) {
+            movement -= right;
+        }
+        if input.is_key_pressed(winit::keyboard::KeyCode::KeyD) {
+            movement += right;
+        }
+
+        if movement.length_squared() > 0.0 {
+            movement = movement.normalize();
+            movement = movement * 5.0 * time.delta_seconds;
+            player_transform.pos += movement;
+        }
+
+        let (mouse_dx, mouse_dy) = input.get_mouse_delta();
+        if input.cursor_grabbed && (mouse_dx != 0.0 || mouse_dy != 0.0) {
+            let sensitivity = 0.0002;
+            let yaw = mouse_dx as f32 * sensitivity;
+            let pitch = -mouse_dy as f32 * sensitivity;
+
+            let cur_rot = player_transform.rot;
+            let cur_euler = cur_rot.to_euler(EulerRot::YXZ);
+            let new_pitch = (cur_euler.1 + pitch).clamp(-std::f32::consts::FRAC_PI_2 + 0.01, std::f32::consts::FRAC_PI_2 - 0.01);
+            let pitch = new_pitch - cur_euler.1;
+
+            let yaw_rot = Quat::from_axis_angle(Vec3::Y, yaw);
+            let pitch_rot = Quat::from_axis_angle(right, pitch);
+            player_transform.rot = (yaw_rot * pitch_rot * player_transform.rot).normalize();
+        }
+    }
 }

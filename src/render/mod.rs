@@ -1,9 +1,11 @@
-pub mod sprite;
 pub mod model;
+pub mod sprite;
 
 use crate::*;
 
-use model::Model;
+use model::{Model, ModelHandle};
+
+use crate::physics::{Camera, Transform};
 
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -13,7 +15,7 @@ use winit::window::Window;
 
 use wgpu::util::DeviceExt;
 
-fn look_at_rh(eye: [f32;3], center: [f32;3], up: [f32;3]) -> [[f32;4];4] {
+fn look_at_rh(eye: [f32; 3], center: [f32; 3], up: [f32; 3]) -> [[f32; 4]; 4] {
     let eye = glam::Vec3::from(eye);
     let center = glam::Vec3::from(center);
     let up = glam::Vec3::from(up);
@@ -30,7 +32,7 @@ fn look_at_rh(eye: [f32;3], center: [f32;3], up: [f32;3]) -> [[f32;4];4] {
     ]
 }
 
-fn perspective_rh(fovy_radians: f32, aspect: f32, near: f32, far: f32) -> [[f32;4];4] {
+fn perspective_rh(fovy_radians: f32, aspect: f32, near: f32, far: f32) -> [[f32; 4]; 4] {
     let f = 1.0 / (fovy_radians / 2.0).tan();
     [
         [f / aspect, 0.0, 0.0, 0.0],
@@ -97,24 +99,27 @@ impl Shaders {
 
             let shader = match file_extension {
                 #[cfg(debug_assertions)]
-                "wgsl" => gpu.device.create_shader_module(wgpu::ShaderModuleDescriptor {
-                    label: path.to_str(),
-                    source: wgpu::ShaderSource::Wgsl(
-                        std::fs::read_to_string(&path)
-                            .expect("Failed to read shader file")
-                            .into(),
-                    ),
-                }),
+                "wgsl" => gpu
+                    .device
+                    .create_shader_module(wgpu::ShaderModuleDescriptor {
+                        label: path.to_str(),
+                        source: wgpu::ShaderSource::Wgsl(
+                            std::fs::read_to_string(&path)
+                                .expect("Failed to read shader file")
+                                .into(),
+                        ),
+                    }),
                 #[cfg(not(debug_assertions))]
                 "spv" => {
                     let shader_data: Vec<u8> =
                         std::fs::read(&path).expect("Failed to read shader file");
                     let source = wgpu::util::make_spirv(&shader_data);
 
-                    gpu.device.create_shader_module(wgpu::ShaderModuleDescriptor {
-                        label: path.to_str(),
-                        source,
-                    })
+                    gpu.device
+                        .create_shader_module(wgpu::ShaderModuleDescriptor {
+                            label: path.to_str(),
+                            source,
+                        })
                 }
                 _ => {
                     println!(
@@ -126,112 +131,126 @@ impl Shaders {
             };
 
             Some(shader)
-        }).unwrap();
+        })
+        .unwrap();
 
         let (model_pipeline, model_bind_group_layout) = Self::create_model_pipeline(gpu, &shaders);
 
-        Self { shaders, model_pipeline, model_bind_group_layout }
+        Self {
+            shaders,
+            model_pipeline,
+            model_bind_group_layout,
+        }
     }
 
-    fn create_model_pipeline(gpu: &Gpu, shaders: &HashMap<String, wgpu::ShaderModule>) -> (wgpu::RenderPipeline, wgpu::BindGroupLayout) {
+    fn create_model_pipeline(
+        gpu: &Gpu,
+        shaders: &HashMap<String, wgpu::ShaderModule>,
+    ) -> (wgpu::RenderPipeline, wgpu::BindGroupLayout) {
         let vs_module = shaders.get("vs_main").expect("vs_main shader not found");
         let fs_module = shaders.get("fg_main").expect("fg_main shader not found");
 
-        let bind_group_layout = gpu.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("Model Bind Group Layout"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 2,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 3,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-            ],
-        });
+        let bind_group_layout =
+            gpu.device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: Some("Model Bind Group Layout"),
+                    entries: &[
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 0,
+                            visibility: wgpu::ShaderStages::VERTEX,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Uniform,
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 1,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Uniform,
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 2,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Uniform,
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 3,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Uniform,
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                    ],
+                });
 
-        let pipeline_layout = gpu.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("Model Pipeline Layout"),
-            bind_group_layouts: &[&bind_group_layout],
-            push_constant_ranges: &[],
-        });
+        let pipeline_layout = gpu
+            .device
+            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Model Pipeline Layout"),
+                bind_group_layouts: &[&bind_group_layout],
+                push_constant_ranges: &[],
+            });
 
-        let pipeline = gpu.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Model Pipeline"),
-            layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: vs_module,
-                entry_point: Some("main"),
-                buffers: &[Model::get_vertex_layout()],
-                compilation_options: Default::default(),
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: fs_module,
-                entry_point: Some("main"),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: gpu.surface_format,
-                    blend: Some(wgpu::BlendState::REPLACE),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-                compilation_options: Default::default(),
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                strip_index_format: None,
-                front_face: wgpu::FrontFace::Ccw,
-                cull_mode: None,
-                polygon_mode: wgpu::PolygonMode::Fill,
-                unclipped_depth: false,
-                conservative: false,
-            },
-            depth_stencil: Some(wgpu::DepthStencilState {
-                format: wgpu::TextureFormat::Depth24Plus,
-                depth_write_enabled: true,
-                depth_compare: wgpu::CompareFunction::Less,
-                stencil: wgpu::StencilState::default(),
-                bias: wgpu::DepthBiasState::default(),
-            }),
-            multisample: wgpu::MultisampleState {
-                count: 1,
-                mask: !0,
-                alpha_to_coverage_enabled: false,
-            },
-            multiview: None,
-            cache: None,
-        });
+        let pipeline = gpu
+            .device
+            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("Model Pipeline"),
+                layout: Some(&pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: vs_module,
+                    entry_point: Some("main"),
+                    buffers: &[Model::get_vertex_layout()],
+                    compilation_options: Default::default(),
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: fs_module,
+                    entry_point: Some("main"),
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: gpu.surface_format,
+                        blend: Some(wgpu::BlendState::REPLACE),
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                    compilation_options: Default::default(),
+                }),
+                primitive: wgpu::PrimitiveState {
+                    topology: wgpu::PrimitiveTopology::TriangleList,
+                    strip_index_format: None,
+                    front_face: wgpu::FrontFace::Ccw,
+                    cull_mode: None,
+                    polygon_mode: wgpu::PolygonMode::Fill,
+                    unclipped_depth: false,
+                    conservative: false,
+                },
+                depth_stencil: Some(wgpu::DepthStencilState {
+                    format: wgpu::TextureFormat::Depth24Plus,
+                    depth_write_enabled: true,
+                    depth_compare: wgpu::CompareFunction::Less,
+                    stencil: wgpu::StencilState::default(),
+                    bias: wgpu::DepthBiasState::default(),
+                }),
+                multisample: wgpu::MultisampleState {
+                    count: 1,
+                    mask: !0,
+                    alpha_to_coverage_enabled: false,
+                },
+                multiview: None,
+                cache: None,
+            });
 
         (pipeline, bind_group_layout)
     }
@@ -254,15 +273,7 @@ pub struct Models {
 
 impl Models {
     pub fn load(gpu: &Gpu) -> Self {
-        let models = crate::gather_dir("models", |path| {
-            println!("Loading model: {:?}", path);
-            Model::load(path, gpu)
-        }).unwrap();
-
-        println!("Loaded {} models", models.len());
-        for (name, _) in &models {
-            println!("Model loaded: {}", name);
-        }
+        let models = crate::gather_dir("models", |path| Model::load(path, gpu)).unwrap();
 
         Self { models }
     }
@@ -296,7 +307,7 @@ impl Gpu {
         let cap = surface.get_capabilities(&adapter);
         let surface_format = cap.formats[0];
 
-    let mut state = Self {
+        let mut state = Self {
             window,
             device,
             queue,
@@ -309,7 +320,7 @@ impl Gpu {
             quads: Vec::new(),
         };
 
-    state.configure_surface();
+        state.configure_surface();
 
         state
     }
@@ -408,6 +419,9 @@ system!(
         gpu: res &mut Gpu,
         shaders: res &Shaders,
         models: res &Models,
+
+        to_display: query (&Transform, &ModelHandle),
+        camera: query (&Transform, &Camera),
     ) {
         let (Some(gpu), Some(shaders), Some(models)) = (gpu, shaders, models) else {
             return;
@@ -426,7 +440,7 @@ system!(
 
         let mut encoder = gpu.device.create_command_encoder(&Default::default());
 
-        {
+        if let Some((transform, camera)) = camera.next() {
             let depth_view_option = gpu.depth_texture.as_ref().map(|tex| {
                 tex.create_view(&wgpu::TextureViewDescriptor::default())
             });
@@ -439,9 +453,9 @@ system!(
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 1.0,
-                            g: 0.0,
-                            b: 0.0,
+                            r: 0.1,
+                            g: 0.2,
+                            b: 0.3,
                             a: 1.0,
                         }),
                         store: wgpu::StoreOp::Store,
@@ -463,28 +477,25 @@ system!(
                 });
             }
 
+            let projection_matrix = camera.projection_matrix();
+            let projection_matrix = projection_matrix.to_cols_array_2d();
+
+            let view_matrix = transform.to_view_matrix();
+            let view_matrix = view_matrix.to_cols_array_2d();
+
             let mut renderpass = encoder.begin_render_pass(&renderpass_desc);
 
-            if let Some(cube_model) = models.models.get("cube") {
-                let scale = 1.0;
-                let model_matrix: [[f32; 4]; 4] = [
-                    [scale, 0.0, 0.0, 0.0],
-                    [0.0, scale, 0.0, 0.0],
-                    [0.0, 0.0, scale, 0.0],
-                    [0.0, 0.0, 0.0, 1.0],
-                ];
+            for model in to_display {
+                let (transform, model_handle) = model;
 
-                let eye = [5.0f32, 5.0, 5.0];
-                let center = [0.0f32, 0.0, 0.0];
-                let up = [0.0f32, 1.0, 0.0];
-                let view_matrix = look_at_rh(eye, center, up);
+                let Some(model) = models.models.get(&model_handle.path) else {
+                    eprintln!("Model not found: {}", model_handle.path);
+                    continue;
+                };
 
-                let aspect = gpu.size.width as f32 / gpu.size.height as f32;
-                let fov = 45.0 * std::f32::consts::PI / 180.0;
-                let near = 0.1;
-                let far = 100.0;
+                let model_matrix = transform.to_matrix();
+                let model_matrix = model_matrix.to_cols_array_2d();
 
-                let projection_matrix = perspective_rh(fov, aspect, near, far);
 
                 let uniforms_data = [
                     model_matrix,
@@ -555,7 +566,7 @@ system!(
 
                 renderpass.set_pipeline(&shaders.model_pipeline);
                 renderpass.set_bind_group(0, &bind_group, &[]);
-                cube_model.render(&mut renderpass);
+                model.render(&mut renderpass);
             }
         }
 

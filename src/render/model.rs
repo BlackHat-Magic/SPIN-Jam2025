@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
-use wgpu::util::DeviceExt;
 use crate::*;
+use wgpu::util::DeviceExt;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -18,11 +18,14 @@ pub struct Model {
     pub index_count: u32,
 }
 
+#[derive(Component)]
+pub struct ModelHandle {
+    pub path: String,
+}
+
 impl Model {
     pub fn load_obj(path: &PathBuf, gpu: &Gpu) -> Option<Self> {
-        println!("Loading OBJ file: {:?}", path);
         let contents = std::fs::read_to_string(path).ok()?;
-        println!("OBJ file contents length: {}", contents.len());
 
         let mut positions = Vec::new();
         let mut normals = Vec::new();
@@ -57,10 +60,7 @@ impl Model {
                 }
                 "vt" => {
                     if parts.len() >= 3 {
-                        uvs.push([
-                            parts[1].parse().ok()?,
-                            parts[2].parse().ok()?,
-                        ]);
+                        uvs.push([parts[1].parse().ok()?, parts[2].parse().ok()?]);
                     }
                 }
                 "f" => {
@@ -73,8 +73,13 @@ impl Model {
                                 let uv_idx: usize = indices_str[1].parse().ok()?;
                                 let normal_idx: usize = indices_str[2].parse().ok()?;
 
-                                if pos_idx > 0 && uv_idx > 0 && normal_idx > 0 &&
-                                   pos_idx <= positions.len() && uv_idx <= uvs.len() && normal_idx <= normals.len() {
+                                if pos_idx > 0
+                                    && uv_idx > 0
+                                    && normal_idx > 0
+                                    && pos_idx <= positions.len()
+                                    && uv_idx <= uvs.len()
+                                    && normal_idx <= normals.len()
+                                {
                                     face_indices.push((pos_idx - 1, uv_idx - 1, normal_idx - 1));
                                 }
                             }
@@ -97,7 +102,11 @@ impl Model {
                                 }
 
                                 let base_index = vertices.len() as u16 - 3;
-                                indices.extend_from_slice(&[base_index, base_index + 1, base_index + 2]);
+                                indices.extend_from_slice(&[
+                                    base_index,
+                                    base_index + 1,
+                                    base_index + 2,
+                                ]);
                             }
                         }
                     }
@@ -106,24 +115,26 @@ impl Model {
             }
         }
 
-        println!("Loaded {} vertices, {} indices", vertices.len(), indices.len());
-
         if vertices.is_empty() {
             println!("No vertices loaded from OBJ file");
             return None;
         }
 
-        let vertex_buffer = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("OBJ Vertex Buffer"),
-            contents: bytemuck::cast_slice(&vertices),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
+        let vertex_buffer = gpu
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("OBJ Vertex Buffer"),
+                contents: bytemuck::cast_slice(&vertices),
+                usage: wgpu::BufferUsages::VERTEX,
+            });
 
-        let index_buffer = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("OBJ Index Buffer"),
-            contents: bytemuck::cast_slice(&indices),
-            usage: wgpu::BufferUsages::INDEX,
-        });
+        let index_buffer = gpu
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("OBJ Index Buffer"),
+                contents: bytemuck::cast_slice(&indices),
+                usage: wgpu::BufferUsages::INDEX,
+            });
 
         Some(Model {
             vertex_buffer,
@@ -149,7 +160,8 @@ impl Model {
                     format: wgpu::VertexFormat::Float32x3, // normal
                 },
                 wgpu::VertexAttribute {
-                    offset: (std::mem::size_of::<[f32; 3]>() + std::mem::size_of::<[f32; 3]>()) as wgpu::BufferAddress,
+                    offset: (std::mem::size_of::<[f32; 3]>() + std::mem::size_of::<[f32; 3]>())
+                        as wgpu::BufferAddress,
                     shader_location: 2,
                     format: wgpu::VertexFormat::Float32x2, // uv
                 },
@@ -160,9 +172,7 @@ impl Model {
     pub fn load(path: &PathBuf, gpu: &Gpu) -> Option<Self> {
         let file_extension = path.extension()?.to_str()?;
         match file_extension {
-            "obj" => {
-                Self::load_obj(path, gpu)
-            },
+            "obj" => Self::load_obj(path, gpu),
             _ => {
                 eprintln!("Unsupported model format: {}", file_extension);
                 None

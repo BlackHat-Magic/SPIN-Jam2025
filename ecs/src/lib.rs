@@ -105,6 +105,17 @@ pub fn get_resource_id<T>() -> usize {
         .expect("Resource not registered")
 }
 
+#[derive(Component)]
+pub struct EntityId {
+    id: u32,
+}
+
+impl EntityId {
+    pub fn get(&self) -> u32 {
+        self.id
+    }
+}
+
 pub struct Entity {
     pub id: u32,
     pub(crate) components: Vec<Option<Box<dyn Component>>>,
@@ -112,10 +123,14 @@ pub struct Entity {
 
 impl Entity {
     pub fn new(id: u32) -> Self {
-        Self {
-            id,
-            components: Vec::with_capacity(COMPONENT_IDS.get().unwrap().len()),
-        }
+        let mut components =
+            Vec::with_capacity(COMPONENT_IDS.get_or_init(build_component_ids).len());
+        components.resize_with(COMPONENT_IDS.get_or_init(build_component_ids).len(), || {
+            None
+        });
+        let mut result = Self { id, components };
+        result.add_component(Box::new(EntityId { id })).unwrap();
+        result
     }
 
     pub fn set_component(&mut self, component: Option<Box<dyn Component>>, id: usize) {

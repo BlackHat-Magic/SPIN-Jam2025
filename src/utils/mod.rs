@@ -1,6 +1,8 @@
-use std::collections::HashMap;
 use anyhow::Result;
+use std::collections::HashMap;
 use std::path::PathBuf;
+
+pub mod time;
 
 pub fn get_resource_path(relative_path: &str) -> PathBuf {
     let path = std::env::current_exe().expect("Can't find path to executable");

@@ -105,7 +105,9 @@ pub fn system(item: TokenStream) -> TokenStream {
     let component_access = component_access(&shared_components, &mutable_components);
     let resource_access = resource_access(&shared_resources, &mutable_resources);
 
-    let all_send_sync = shared_components.iter().chain(mutable_components.iter())
+    let all_send_sync = shared_components
+        .iter()
+        .chain(mutable_components.iter())
         .chain(shared_resources.iter())
         .chain(mutable_resources.iter())
         .collect::<Vec<_>>();
@@ -409,7 +411,7 @@ fn handle_query(
         });
 
         Some(quote! {
-            let #arg_name = {
+            let mut #arg_name = {
                 #gather_code
             }.into_iter();
         })
@@ -445,7 +447,7 @@ fn handle_resource(
                             }
                             mutable_resources.push(res_ty.clone());
                             return Some(quote! {
-                                let #arg_name = World::get_resource_mut::<#res_ty>(world);
+                                let mut #arg_name = World::get_resource_mut::<#res_ty>(world);
                             });
                         }
                     } else {
@@ -461,7 +463,7 @@ fn handle_resource(
                                 shared_resources.push(res_ty.clone());
                             }
                             return Some(quote! {
-                                let #arg_name = World::get_resource::<#res_ty>(world);
+                                let mut #arg_name = World::get_resource::<#res_ty>(world);
                             });
                         }
                     }

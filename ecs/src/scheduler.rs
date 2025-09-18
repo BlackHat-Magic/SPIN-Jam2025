@@ -33,7 +33,10 @@ unsafe impl Sync for SystemWrapper {}
 
 impl Scheduler {
     pub fn new(world: *mut World) -> Self {
-        Self { world, systems: HashMap::new() }
+        Self {
+            world,
+            systems: HashMap::new(),
+        }
     }
 
     pub fn run(scheduler: *mut Scheduler, stage: SystemStage) {
