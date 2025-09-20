@@ -1,5 +1,12 @@
 use crate::*;
 
+pub struct PhysicsPlugin;
+
+impl Plugin for PhysicsPlugin {
+    fn build(&self, _app: &mut App) {
+    }
+}
+
 #[derive(Component)]
 pub struct Transform {
     pub pos: Vec3,

@@ -33,6 +33,10 @@ impl App {
         }
     }
 
+    pub fn add_plugin(&mut self, plugin: impl Plugin) {
+        plugin.build(self);
+    }
+
     pub fn init(&mut self) {
         unsafe {
             let world = self.commands.world;

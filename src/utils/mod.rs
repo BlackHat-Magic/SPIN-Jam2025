@@ -2,7 +2,19 @@ use anyhow::Result;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use crate::*;
+
 pub mod time;
+pub mod input;
+
+pub struct UtilPlugin;
+
+impl Plugin for UtilPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_system(input::input_system, SystemStage::PreUpdate);
+        app.add_system(time::init_time, SystemStage::Init);
+    }
+}
 
 pub fn get_resource_path(relative_path: &str) -> PathBuf {
     let path = std::env::current_exe().expect("Can't find path to executable");

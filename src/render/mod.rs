@@ -15,6 +15,16 @@ use winit::window::Window;
 
 use wgpu::util::DeviceExt;
 
+pub struct RenderPlugin;
+
+impl Plugin for RenderPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_system(render_system, SystemStage::Render);
+        app.add_system(init_shaders, SystemStage::Init);
+        app.add_system(init_models, SystemStage::Init);
+    }
+}
+
 #[derive(Copy, Clone)]
 pub enum Align {
     TopLeft,

@@ -10,28 +10,31 @@ use winit::{
 
 pub use ecs::*;
 
-pub mod input;
 pub mod physics;
 pub mod render;
 pub mod utils;
-use input::Input;
 
 pub use physics::*;
 use render::Gpu;
 pub use render::model::ModelHandle;
 pub use utils::time::*;
 pub use utils::*;
+use utils::input::Input;
+
+
 
 fn main() {
+    let default_plugins = plugin_group!(
+        utils::UtilPlugin,
+        physics::PhysicsPlugin,
+        render::RenderPlugin,
+    );
+
     let mut app = App::new();
 
-    app.add_system(input::input_system, SystemStage::PreUpdate);
+    app.add_plugin(default_plugins);
     app.add_system(update_time, SystemStage::PreUpdate);
     app.add_system(control_player, SystemStage::Update);
-    app.add_system(render::render_system, SystemStage::Render);
-    app.add_system(init_time, SystemStage::Init);
-    app.add_system(render::init_shaders, SystemStage::Init);
-    app.add_system(render::init_models, SystemStage::Init);
     app.add_system(init_scene, SystemStage::Init);
 
     struct WinitApp {
@@ -150,8 +153,8 @@ system! {
         }
 
 
-        let forward = player_transform.rot * Vec3::Z;
-        let right = player_transform.rot * -Vec3::X;
+        let forward = player_transform.rot * -Vec3::Z;
+        let right = player_transform.rot * Vec3::X;
 
         let mut movement = Vec3::ZERO;
 

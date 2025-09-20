@@ -36,6 +36,47 @@ impl<T: Any> SendSyncCheck for T {
     }
 }
 
+pub trait Plugin {
+    fn build(&self, app: &mut App);
+}
+
+pub struct PluginGroup {
+    plugins: Vec<Box<dyn Plugin>>,
+}
+
+impl Plugin for PluginGroup {
+    fn build(&self, app: &mut App) {
+        for plugin in &self.plugins {
+            plugin.build(app);
+        }
+    }
+}
+
+impl PluginGroup {
+    pub fn new() -> Self {
+        Self {
+            plugins: vec![]
+        }
+    }
+
+    pub fn add(&mut self, plugin: Box<dyn Plugin>) {
+        self.plugins.push(plugin);
+    }
+}
+
+#[macro_export]
+macro_rules! plugin_group {
+    ($($plugin:expr),* $(,)?) => {
+        {
+            let mut group = PluginGroup::new();
+            $(
+                group.add(Box::new($plugin));
+            )*
+            group
+        }
+    };
+}
+
 pub trait Component: Any {
     fn get_type_id(&self) -> usize;
     fn as_any(&self) -> &dyn Any;
