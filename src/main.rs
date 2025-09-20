@@ -86,7 +86,6 @@ fn main() {
         }
     }
 
-    app.insert_resource(Input::new());
     app.insert_resource(input::WindowEvents { events: Vec::new() });
 
     let app = WinitApp { app };

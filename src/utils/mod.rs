@@ -11,6 +11,8 @@ pub struct UtilPlugin;
 
 impl Plugin for UtilPlugin {
     fn build(&self, app: &mut App) {
+        app.insert_resource(Input::new());
+
         app.add_system(input::input_system, SystemStage::PreUpdate);
         app.add_system(time::init_time, SystemStage::Init);
     }
