@@ -45,6 +45,7 @@
 - **Milestone 2 – Deterministic Broad-Phase**
   - Deliverables: sweep-and-prune structure producing candidate pairs, AABB generation per collider, deterministic ordering seeded from `PhysicsWorld`.
   - Acceptance: tests assert repeatable pair ordering for randomized fixtures seeded via `PhysicsTestWorld`; benchmarks recorded to ensure O(n log n) scaling on sample data.
+  - Status: `PhysicsWorld::rebuild_broad_phase` maintains a deterministic sweep-and-prune pair list driven by entity IDs. New tests in `tests/physics.rs` verify repeatable ordering and basic overlap coverage. Next work: integrate axis sweep caching to minimize per-frame rebuild cost and incorporate broad-phase pairs into narrow-phase dispatch.
 - **Milestone 3 – Narrow-Phase & Manifolds**
   - Deliverables: GJK/EPA implementation for convex shapes, SAT optimizations for boxes, analytic capsule checks, manifold cache.
   - Acceptance: regression tests using harness fixtures validate contact normals/penetration depth; deterministic manifold IDs reused across frames; docs enumerate supported shape pairs.

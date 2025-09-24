@@ -68,4 +68,4 @@
 2. **Set Up Physics Test Harness** – Expand [tests/physics.rs](cci:7://file:///home/slangerosuna/proj/klaus_of_death_again/tests/physics.rs:0:0-0:0) with initial scaffolding and utilities. [x]
 3. **Choose Collision Shapes & Solver Approach** – Decide on primitive support order and solver method (impulse-based, sequential impulses). [x]
 4. **Define ECS Integration Contract** – Document how physics components/resources interact with existing systems (`Transform`, `SystemStage` usage). [x]
-5. **Plan Milestone Deliverables** – Break Phase 1 into sprint-sized tasks with acceptance tests for each feature slice. [ ]
+5. **Plan Milestone Deliverables** – Break Phase 1 into sprint-sized tasks with acceptance tests for each feature slice (see `docs/plans/physics_core.md#milestone-deliverables-phase-1`). [x]
