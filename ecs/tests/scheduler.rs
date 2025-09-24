@@ -1,4 +1,4 @@
-use ecs::{system, App, Commands, Component, Resource, SystemStage};
+use ecs::*;
 
 #[derive(Component, Default)]
 struct Position(u32);
@@ -49,5 +49,5 @@ fn scheduler_runs_systems_once_per_tick_in_stage_order() {
 
     let mut positions = ecs::World::get_components::<Position>(world);
     assert_eq!(positions.len(), 1);
-    assert_eq!(positions.pop().unwrap().1 .0, 1);
+    assert_eq!(positions.pop().unwrap().1.0, 1);
 }

@@ -56,7 +56,9 @@ fn physics_design_doc_describes_testing_strategy() {
         "deterministic seeds",
     ] {
         assert!(
-            contents.to_lowercase().contains(&expectation.to_lowercase()),
+            contents
+                .to_lowercase()
+                .contains(&expectation.to_lowercase()),
             "missing testing strategy detail `{}` in physics design document",
             expectation
         );

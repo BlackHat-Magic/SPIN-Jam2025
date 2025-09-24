@@ -51,7 +51,9 @@ fn add_get_and_remove_components_round_trip() {
     assert_eq!(velocities[0].0, entity);
     assert_eq!(*velocities[0].1, Velocity(2.71));
 
-    let removed = app.remove_component::<Position>(entity).expect("component missing");
+    let removed = app
+        .remove_component::<Position>(entity)
+        .expect("component missing");
     assert!(removed.as_any().downcast_ref::<Position>().is_some());
 
     let positions = World::get_components::<Position>(world);

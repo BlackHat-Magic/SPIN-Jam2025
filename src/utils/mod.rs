@@ -2,11 +2,11 @@ use anyhow::Result;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use crate::*;
 use crate::utils::input::Input;
+use crate::*;
 
-pub mod time;
 pub mod input;
+pub mod time;
 
 pub struct UtilPlugin;
 

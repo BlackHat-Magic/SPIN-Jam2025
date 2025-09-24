@@ -1,11 +1,14 @@
 use crate::*;
 use glam::{Mat4, Quat, Vec3};
 
+pub mod test;
+
+pub use test::PhysicsTestWorld;
+
 pub struct PhysicsPlugin;
 
 impl Plugin for PhysicsPlugin {
-    fn build(&self, _app: &mut App) {
-    }
+    fn build(&self, _app: &mut App) {}
 }
 
 #[derive(Component)]

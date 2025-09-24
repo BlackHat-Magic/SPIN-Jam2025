@@ -1,4 +1,4 @@
-use klaus_of_death::physics::{Camera, Transform};
+use klaus_of_death::physics::{Camera, Transform, test::PhysicsTestWorld};
 
 use glam::{Mat4, Quat, Vec3};
 
@@ -6,7 +6,12 @@ fn assert_mat4_close(a: Mat4, b: Mat4, epsilon: f32) {
     let a = a.to_cols_array();
     let b = b.to_cols_array();
     for (ai, bi) in a.iter().zip(b.iter()) {
-        assert!((ai - bi).abs() <= epsilon, "matrices differ: {} vs {}", ai, bi);
+        assert!(
+            (ai - bi).abs() <= epsilon,
+            "matrices differ: {} vs {}",
+            ai,
+            bi
+        );
     }
 }
 
@@ -19,7 +24,8 @@ fn transform_matrix_roundtrip() {
     };
 
     let matrix = transform.to_matrix();
-    let expected = Mat4::from_scale_rotation_translation(transform.scale, transform.rot, transform.pos);
+    let expected =
+        Mat4::from_scale_rotation_translation(transform.scale, transform.rot, transform.pos);
     assert_mat4_close(matrix, expected, 1e-6);
 
     let reconstructed = Transform::from_matrix(matrix);
@@ -49,4 +55,13 @@ fn camera_projection_matches_glam_helpers() {
     let projection = camera.projection_matrix();
     let expected = Mat4::perspective_rh(camera.fov_y, camera.aspect, camera.near, camera.far);
     assert_mat4_close(projection, expected, 1e-6);
+}
+
+#[test]
+fn physics_test_world_initializes_with_defaults() {
+    let world = PhysicsTestWorld::new();
+
+    assert_eq!(world.gravity(), Vec3::new(0.0, -9.81, 0.0));
+    assert!((world.dt() - (1.0 / 60.0)).abs() < f32::EPSILON);
+    assert_eq!(world.body_count(), 0);
 }

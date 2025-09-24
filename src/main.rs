@@ -16,13 +16,11 @@ pub mod utils;
 
 pub use physics::*;
 use render::Gpu;
-pub use render::model::ModelHandle;
 use render::Material;
+pub use render::model::ModelHandle;
+use utils::input::Input;
 pub use utils::time::*;
 pub use utils::*;
-use utils::input::Input;
-
-
 
 fn main() {
     let default_plugins = plugin_group!(
@@ -88,8 +86,7 @@ fn main() {
             _device_id: winit::event::DeviceId,
             event: winit::event::DeviceEvent,
         ) {
-            let device_events =
-                World::get_resource_mut::<input::DeviceEvents>(self.app.world);
+            let device_events = World::get_resource_mut::<input::DeviceEvents>(self.app.world);
             if let Some(device_events) = device_events {
                 device_events.events.push(event);
             }

@@ -78,7 +78,12 @@ impl Input {
         }
     }
 
-    pub fn update(&mut self, gpu: &mut Gpu, events: &mut WindowEvents, device_events: &mut DeviceEvents) {
+    pub fn update(
+        &mut self,
+        gpu: &mut Gpu,
+        events: &mut WindowEvents,
+        device_events: &mut DeviceEvents,
+    ) {
         self.key_just_pressed.clear();
         self.mouse_buttons_just_pressed.clear();
         let mut mouse_delta = (0.0, 0.0);
@@ -136,11 +141,14 @@ impl Input {
         }
 
         if self.cursor_grabbed {
-            let _ = gpu.window.set_cursor_grab(winit::window::CursorGrabMode::Locked);
+            let _ = gpu
+                .window
+                .set_cursor_grab(winit::window::CursorGrabMode::Locked);
             gpu.window.set_cursor_visible(false);
-
         } else {
-            let _ = gpu.window.set_cursor_grab(winit::window::CursorGrabMode::None);
+            let _ = gpu
+                .window
+                .set_cursor_grab(winit::window::CursorGrabMode::None);
             gpu.window.set_cursor_visible(true);
         }
 
@@ -160,7 +168,10 @@ impl Input {
     }
 
     pub fn is_mouse_button_just_pressed(&self, button: winit::event::MouseButton) -> bool {
-        *self.mouse_buttons_just_pressed.get(&button).unwrap_or(&false)
+        *self
+            .mouse_buttons_just_pressed
+            .get(&button)
+            .unwrap_or(&false)
     }
 
     pub fn get_mouse_delta(&self) -> (f64, f64) {

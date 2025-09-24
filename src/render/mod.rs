@@ -309,7 +309,7 @@ impl Shaders {
                     module: vs_module,
                     entry_point: Some("main"),
                     buffers: &[wgpu::VertexBufferLayout {
-                        array_stride: std::mem::size_of::<[f32; 5]>() as wgpu::BufferAddress,  // x, y, z, u, v
+                        array_stride: std::mem::size_of::<[f32; 5]>() as wgpu::BufferAddress, // x, y, z, u, v
                         step_mode: wgpu::VertexStepMode::Vertex,
                         attributes: &[
                             wgpu::VertexAttribute {
@@ -331,7 +331,7 @@ impl Shaders {
                     entry_point: Some("main"),
                     targets: &[Some(wgpu::ColorTargetState {
                         format: gpu.surface_format,
-                        blend: Some(wgpu::BlendState::ALPHA_BLENDING),  // Enable blending for transparency
+                        blend: Some(wgpu::BlendState::ALPHA_BLENDING), // Enable blending for transparency
                         write_mask: wgpu::ColorWrites::ALL,
                     })],
                     compilation_options: Default::default(),
@@ -345,7 +345,7 @@ impl Shaders {
                     unclipped_depth: false,
                     conservative: false,
                 },
-                depth_stencil: None,  // No depth for quads
+                depth_stencil: None, // No depth for quads
                 multisample: wgpu::MultisampleState {
                     count: 1,
                     mask: !0,

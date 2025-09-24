@@ -1,8 +1,8 @@
 use std::thread;
 use std::time::Duration;
 
-use klaus_of_death::{App, Commands, SystemStage, World};
 use klaus_of_death::utils::time::{self, Time};
+use klaus_of_death::{App, Commands, SystemStage, World};
 
 #[test]
 fn time_systems_initialize_and_update_delta() {

@@ -54,9 +54,7 @@ impl Plugin for PluginGroup {
 
 impl PluginGroup {
     pub fn new() -> Self {
-        Self {
-            plugins: vec![]
-        }
+        Self { plugins: vec![] }
     }
 
     pub fn add(&mut self, plugin: Box<dyn Plugin>) {
