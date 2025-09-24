@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use crate::*;
+use crate::utils::input::Input;
 
 pub mod time;
 pub mod input;

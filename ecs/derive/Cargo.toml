@@ -10,3 +10,7 @@ syn = "2.0.106"
 
 [lib]
 proc-macro = true
+
+[dev-dependencies]
+trybuild = "1.0"
+ecs = { path = ".." }

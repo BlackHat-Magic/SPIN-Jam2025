@@ -1,7 +1,7 @@
 # Physics Core Plan
 
 ## TDD Log
-- **[Red | 2025-09-24]** Draft physics design doc is missing. `docs/requirements.md` expects a document covering target features, ECS integration, and math utilities, but no such outline exists yet.
+- **[Red | 2025-09-24]** `tests/docs.rs::physics_design_doc_captures_core_decisions` fails. Current physics design doc lacks explicit statements about integration method, solver strategy, and related decisions.
 
 ## Design Outline (Pending)
 - **Rigid Bodies & Forces:** _pending drafting_

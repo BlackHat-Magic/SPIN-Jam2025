@@ -18,3 +18,24 @@ fn physics_design_doc_outlines_phase_one_requirements() {
         );
     }
 }
+
+#[test]
+fn physics_design_doc_captures_core_decisions() {
+    let contents = fs::read_to_string("docs/plans/physics_design.md")
+        .expect("physics design document missing");
+
+    for decision in [
+        "semi-implicit euler integration",
+        "sequential impulse solver",
+        "warm starting",
+        "island sleeping",
+        "deterministic sweep-and-prune",
+        "animation-driven events",
+    ] {
+        assert!(
+            contents.to_lowercase().contains(decision),
+            "missing design decision `{}` in physics design document",
+            decision
+        );
+    }
+}

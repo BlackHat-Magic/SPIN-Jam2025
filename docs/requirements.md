@@ -13,7 +13,7 @@ All work must follow a strict Test-Driven Development (TDD) loop (Red → Green 
 ## Immediate Next Actions
 
 - `[x]` Draft Physics Design Doc  
-  • **Tests:** `tests/docs.rs::physics_design_doc_outlines_phase_one_requirements`  
+  • **Tests:** `tests/docs.rs::physics_design_doc_outlines_phase_one_requirements`, `tests/docs.rs::physics_design_doc_captures_core_decisions`  
   • **Plan Doc:** `docs/plans/physics_design.md`
 - `[ ]` Set Up Physics Test Harness  
   • **Tests:** `tests/physics.rs`, new fixture modules (to be created)  
@@ -114,3 +114,4 @@ All work must follow a strict Test-Driven Development (TDD) loop (Red → Green 
 Record each TDD cycle update here:
 
 - **2025-09-24** – Drafted physics design doc (`docs/plans/physics_design.md`). Added regression test `tests/docs.rs::physics_design_doc_outlines_phase_one_requirements`. Updated execution plan per TDD cycle.
+- **2025-09-24** – Expanded physics design decisions covering integration strategy, solver, warm starting, and deterministic broad-phase ordering. Added regression test `tests/docs.rs::physics_design_doc_captures_core_decisions`.
