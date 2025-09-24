@@ -15,8 +15,8 @@ All work must follow a strict Test-Driven Development (TDD) loop (Red → Green 
 - `[x]` Draft Physics Design Doc  
   • **Tests:** `tests/docs.rs::physics_design_doc_outlines_phase_one_requirements`, `tests/docs.rs::physics_design_doc_captures_core_decisions`, `tests/docs.rs::physics_design_doc_describes_testing_strategy`  
   • **Plan Doc:** `docs/plans/physics_design.md`
-- `[ ]` Set Up Physics Test Harness  
-  • **Tests:** `tests/physics.rs`, new fixture modules (to be created)  
+- `[~]` Set Up Physics Test Harness  
+  • **Tests:** `tests/physics.rs::physics_test_world_initializes_with_defaults` (new), additional fixture modules (to be created)  
   • **Plan Doc:** `docs/plans/physics_core.md`
 - `[ ]` Choose Collision Shapes & Solver Approach  
   • **Tests:** Targeted unit tests per shape module (to be enumerated)  
@@ -116,3 +116,4 @@ Record each TDD cycle update here:
 - **2025-09-24** – Drafted physics design doc (`docs/plans/physics_design.md`). Added regression test `tests/docs.rs::physics_design_doc_outlines_phase_one_requirements`. Updated execution plan per TDD cycle.
 - **2025-09-24** – Expanded physics design decisions covering integration strategy, solver, warm starting, and deterministic broad-phase ordering. Added regression test `tests/docs.rs::physics_design_doc_captures_core_decisions`.
 - **2025-09-24** – Documented physics testing strategy within `docs/plans/physics_design.md`, covering fixtures, energy conservation, and deterministic seeds. Added regression test `tests/docs.rs::physics_design_doc_describes_testing_strategy`.
+- **2025-09-25** – Began physics test harness scaffolding with `PhysicsTestWorld` defaults and regression test `tests/physics.rs::physics_test_world_initializes_with_defaults`.

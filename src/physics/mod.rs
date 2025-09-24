@@ -3,7 +3,7 @@ use glam::{Mat4, Quat, Vec3};
 
 pub mod test;
 
-pub use test::PhysicsTestWorld;
+pub use test::{BodyHandle, BodyInit, BodyState, PhysicsTestWorld};
 
 pub struct PhysicsPlugin;
 

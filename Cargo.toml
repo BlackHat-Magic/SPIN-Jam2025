@@ -19,6 +19,7 @@ winit = "0.30.12"
 anyhow = "1.0.99"
 fbxcel-dom = "0.0.10"
 glam = "0.30.5"
+rand = { version = "0.8.5", features = ["std"] }
 
 [build-dependencies]
 naga = { version = "26.0.0", features = ["wgsl-in", "spv-out"] }
