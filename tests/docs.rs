@@ -39,3 +39,26 @@ fn physics_design_doc_captures_core_decisions() {
         );
     }
 }
+
+#[test]
+fn physics_design_doc_describes_testing_strategy() {
+    let contents = fs::read_to_string("docs/plans/physics_design.md")
+        .expect("physics design document missing");
+
+    assert!(
+        contents.contains("## Testing Strategy"),
+        "expected `## Testing Strategy` section in physics design document"
+    );
+
+    for expectation in [
+        "PhysicsTestWorld",
+        "energy conservation",
+        "deterministic seeds",
+    ] {
+        assert!(
+            contents.to_lowercase().contains(&expectation.to_lowercase()),
+            "missing testing strategy detail `{}` in physics design document",
+            expectation
+        );
+    }
+}

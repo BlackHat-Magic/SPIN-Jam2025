@@ -22,6 +22,12 @@
 - SIMD-friendly vector wrappers for batch operations inside the solver.
 - Debug assertions for NaN/INF detection after each major solver phase.
 
+## Testing Strategy
+- Establish a reusable `PhysicsTestWorld` helper that constructs deterministic worlds with configurable gravity, integration step, and collision primitives.
+- Extend `tests/physics.rs` with energy conservation regression tests that assert total kinetic + potential energy stays within tolerance over fixed iterations.
+- Seed broad-phase randomness (if any) with deterministic seeds so ordering remains stable across runs and platforms.
+- Provide fixtures for common setups (single body drop, stacked boxes, jointed ragdoll) to accelerate scenario authoring and reuse assertions across suites.
+
 ## Open Questions
 - Should sleeping bodies be managed via island sleeping heuristics or simple velocity thresholds?
 - Desired extensibility for custom joint types (user-defined constraints)?
