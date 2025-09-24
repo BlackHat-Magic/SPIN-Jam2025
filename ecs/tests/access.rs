@@ -46,7 +46,7 @@ fn component_access_detects_read_write_conflicts() {
 
 #[test]
 fn resource_access_mirrors_component_access_rules() {
-    static READ: [usize; 1] = [5];
+    static READ: [usize; 1] = [7];
     static WRITE: [usize; 1] = [7];
 
     let read_only = ResourceAccess {

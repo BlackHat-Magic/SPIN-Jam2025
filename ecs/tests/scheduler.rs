@@ -10,7 +10,7 @@ system! {
     fn writer(query: query(&mut Position), counter: res &mut Counter) {
         let Some(counter) = counter else { return; };
         let mut wrote = false;
-        for (pos,) in query {
+        for pos in query {
             pos.0 += 1;
             wrote = true;
         }
@@ -23,7 +23,7 @@ system! {
 system! {
     fn reader(query: query(&Position), counter: res &mut Counter) {
         let Some(counter) = counter else { return; };
-        for (_pos,) in query {
+        for _pos in query {
             counter.0 += 10;
         }
     }
@@ -49,5 +49,5 @@ fn scheduler_runs_systems_once_per_tick_in_stage_order() {
 
     let mut positions = ecs::World::get_components::<Position>(world);
     assert_eq!(positions.len(), 1);
-    assert_eq!(positions.pop().unwrap().1.0, 1);
+    assert_eq!(positions.pop().unwrap().1 .0, 1);
 }
