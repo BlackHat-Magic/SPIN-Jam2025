@@ -15,6 +15,24 @@ use winit::window::Window;
 
 use wgpu::util::DeviceExt;
 
+#[repr(C)]
+#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+struct MaterialData {
+    albedo: [f32; 4],
+    metallic: f32,
+    roughness: f32,
+    ao: f32,
+    padding: f32,
+}
+
+#[derive(Component)]
+pub struct Material {
+    pub albedo_color: [f32; 4],
+    pub metallic: f32,
+    pub roughness: f32,
+    pub ao: f32,
+}
+
 pub struct RenderPlugin;
 
 impl Plugin for RenderPlugin {
@@ -73,6 +91,8 @@ pub struct Shaders {
     pub shaders: HashMap<String, wgpu::ShaderModule>,
     pub model_pipeline: wgpu::RenderPipeline,
     pub model_bind_group_layout: wgpu::BindGroupLayout,
+    pub quad_pipeline: wgpu::RenderPipeline,
+    pub quad_bind_group_layout: wgpu::BindGroupLayout,
 }
 
 impl Shaders {
@@ -118,11 +138,14 @@ impl Shaders {
         .unwrap();
 
         let (model_pipeline, model_bind_group_layout) = Self::create_model_pipeline(gpu, &shaders);
+        let (quad_pipeline, quad_bind_group_layout) = Self::create_quad_pipeline(gpu, &shaders);
 
         Self {
             shaders,
             model_pipeline,
             model_bind_group_layout,
+            quad_pipeline,
+            quad_bind_group_layout,
         }
     }
 
@@ -226,6 +249,103 @@ impl Shaders {
                     stencil: wgpu::StencilState::default(),
                     bias: wgpu::DepthBiasState::default(),
                 }),
+                multisample: wgpu::MultisampleState {
+                    count: 1,
+                    mask: !0,
+                    alpha_to_coverage_enabled: false,
+                },
+                multiview: None,
+                cache: None,
+            });
+
+        (pipeline, bind_group_layout)
+    }
+
+    fn create_quad_pipeline(
+        gpu: &Gpu,
+        shaders: &HashMap<String, wgpu::ShaderModule>,
+    ) -> (wgpu::RenderPipeline, wgpu::BindGroupLayout) {
+        let vs_module = shaders.get("quad_vs").expect("quad_vs shader not found");
+        let fs_module = shaders.get("quad_fs").expect("quad_fs shader not found");
+
+        let bind_group_layout =
+            gpu.device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: Some("Quad Bind Group Layout"),
+                    entries: &[
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 0,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Texture {
+                                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                                view_dimension: wgpu::TextureViewDimension::D2,
+                                multisampled: false,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 1,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                            count: None,
+                        },
+                    ],
+                });
+
+        let pipeline_layout = gpu
+            .device
+            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Quad Pipeline Layout"),
+                bind_group_layouts: &[&bind_group_layout],
+                push_constant_ranges: &[],
+            });
+
+        let pipeline = gpu
+            .device
+            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("Quad Pipeline"),
+                layout: Some(&pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: vs_module,
+                    entry_point: Some("main"),
+                    buffers: &[wgpu::VertexBufferLayout {
+                        array_stride: std::mem::size_of::<[f32; 5]>() as wgpu::BufferAddress,  // x, y, z, u, v
+                        step_mode: wgpu::VertexStepMode::Vertex,
+                        attributes: &[
+                            wgpu::VertexAttribute {
+                                format: wgpu::VertexFormat::Float32x3,
+                                offset: 0,
+                                shader_location: 0,
+                            },
+                            wgpu::VertexAttribute {
+                                format: wgpu::VertexFormat::Float32x2,
+                                offset: 12,
+                                shader_location: 1,
+                            },
+                        ],
+                    }],
+                    compilation_options: Default::default(),
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: fs_module,
+                    entry_point: Some("main"),
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: gpu.surface_format,
+                        blend: Some(wgpu::BlendState::ALPHA_BLENDING),  // Enable blending for transparency
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                    compilation_options: Default::default(),
+                }),
+                primitive: wgpu::PrimitiveState {
+                    topology: wgpu::PrimitiveTopology::TriangleList,
+                    strip_index_format: None,
+                    front_face: wgpu::FrontFace::Ccw,
+                    cull_mode: None,
+                    polygon_mode: wgpu::PolygonMode::Fill,
+                    unclipped_depth: false,
+                    conservative: false,
+                },
+                depth_stencil: None,  // No depth for quads
                 multisample: wgpu::MultisampleState {
                     count: 1,
                     mask: !0,
@@ -403,7 +523,7 @@ system!(
         shaders: res &Shaders,
         models: res &Models,
 
-        to_display: query (&Transform, &ModelHandle),
+        to_display: query (&Transform, &ModelHandle, &Material),
         camera: query (&Transform, &Camera),
     ) {
         let (Some(gpu), Some(shaders), Some(models)) = (gpu, shaders, models) else {
@@ -469,7 +589,7 @@ system!(
             let mut renderpass = encoder.begin_render_pass(&renderpass_desc);
 
             for model in to_display {
-                let (transform, model_handle) = model;
+                let (transform, model_handle, material) = model;
 
                 let Some(model) = models.models.get(&model_handle.path) else {
                     eprintln!("Model not found: {}", model_handle.path);
@@ -510,17 +630,17 @@ system!(
                     usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
                 });
 
-                let material_data: [f32; 8] = [
-                    1.0, 1.0, 0.0, 0.0, // yellow
-                    0.6,                // metallic
-                    0.1,                // roughness
-                    1.0,                // ao
-                    0.0,                // padding
-                ];
+                let material_data = MaterialData {
+                    albedo: material.albedo_color,
+                    metallic: material.metallic,
+                    roughness: material.roughness,
+                    ao: material.ao,
+                    padding: 0.0,
+                };
 
                 let material_buffer = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                     label: Some("Material Buffer"),
-                    contents: bytemuck::cast_slice(&material_data),
+                    contents: bytemuck::cast_slice(&[material_data]),
                     usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
                 });
 
@@ -551,71 +671,80 @@ system!(
                 renderpass.set_bind_group(0, &bind_group, &[]);
                 model.render(&mut renderpass);
             }
-        }
 
-        {
-            let index_buffer = gpu
-                .device
-                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("Quad Index Buffer"),
-                    contents: bytemuck::cast_slice(&[0u16, 1, 2, 2, 3, 0]),
-                    usage: wgpu::BufferUsages::INDEX,
-                });
-
-            let mut renderpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: None,
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &texture_view,
-                    depth_slice: None,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-            });
-
-            gpu.quads.iter().for_each(|quad| {
-                let _texture_view = quad.texture.create_view(&Default::default());
-                let buffer = gpu
+            // Render quads in the same render pass
+            {
+                let index_buffer = gpu
                     .device
                     .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some("Quad Vertex Buffer"),
-                        contents: bytemuck::cast_slice(&[
-                            quad.rect.0,
-                            quad.rect.1,
-                            0.0,
-                            0.0,
-                            0.0,
-                            quad.rect.0 + quad.rect.2,
-                            quad.rect.1,
-                            0.0,
-                            1.0,
-                            0.0,
-                            quad.rect.0 + quad.rect.2,
-                            quad.rect.1 + quad.rect.3,
-                            0.0,
-                            1.0,
-                            1.0,
-                            quad.rect.0,
-                            quad.rect.1 + quad.rect.3,
-                            0.0,
-                            0.0,
-                            1.0,
-                        ]),
-                        usage: wgpu::BufferUsages::VERTEX,
+                        label: Some("Quad Index Buffer"),
+                        contents: bytemuck::cast_slice(&[0u16, 1, 2, 2, 3, 0]),
+                        usage: wgpu::BufferUsages::INDEX,
                     });
 
-                // TODO: handle pipelines properly
+                gpu.quads.iter().for_each(|quad| {
+                    let texture_view = quad.texture.create_view(&Default::default());
+                    let sampler = gpu.device.create_sampler(&wgpu::SamplerDescriptor {
+                        label: Some("Quad Sampler"),
+                        address_mode_u: wgpu::AddressMode::ClampToEdge,
+                        address_mode_v: wgpu::AddressMode::ClampToEdge,
+                        address_mode_w: wgpu::AddressMode::ClampToEdge,
+                        mag_filter: wgpu::FilterMode::Linear,
+                        min_filter: wgpu::FilterMode::Linear,
+                        mipmap_filter: wgpu::FilterMode::Linear,
+                        ..Default::default()
+                    });
+                    let bind_group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                        label: Some("Quad Bind Group"),
+                        layout: &shaders.quad_bind_group_layout,
+                        entries: &[
+                            wgpu::BindGroupEntry {
+                                binding: 0,
+                                resource: wgpu::BindingResource::TextureView(&texture_view),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 1,
+                                resource: wgpu::BindingResource::Sampler(&sampler),
+                            },
+                        ],
+                    });
 
-                renderpass.set_vertex_buffer(0, buffer.slice(..));
-                renderpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-                renderpass.draw_indexed(0..6, 0, 0..1);
+                    let buffer = gpu
+                        .device
+                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                            label: Some("Quad Vertex Buffer"),
+                            contents: bytemuck::cast_slice(&[
+                                quad.rect.0,
+                                quad.rect.1,
+                                quad.depth,
+                                0.0,
+                                0.0,
+                                quad.rect.0 + quad.rect.2,
+                                quad.rect.1,
+                                quad.depth,
+                                1.0,
+                                0.0,
+                                quad.rect.0 + quad.rect.2,
+                                quad.rect.1 + quad.rect.3,
+                                quad.depth,
+                                1.0,
+                                1.0,
+                                quad.rect.0,
+                                quad.rect.1 + quad.rect.3,
+                                quad.depth,
+                                0.0,
+                                1.0,
+                            ]),
+                            usage: wgpu::BufferUsages::VERTEX,
+                        });
 
-            });
+                    renderpass.set_pipeline(&shaders.quad_pipeline);
+                    renderpass.set_bind_group(0, &bind_group, &[]);
+                    renderpass.set_vertex_buffer(0, buffer.slice(..));
+                    renderpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                    renderpass.draw_indexed(0..6, 0, 0..1);
+                });
+            }
         }
 
         gpu.queue.submit([encoder.finish()]);

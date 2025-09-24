@@ -5,10 +5,11 @@ struct FragmentInput {
 };
 
 struct Material {
-    albedo    : vec3<f32>,
+    albedo    : vec4<f32>,
     metallic  : f32,
     roughness : f32,
     ao        : f32,
+    padding   : f32,
 };
 
 struct Light {
@@ -59,7 +60,7 @@ fn main(input: FragmentInput) -> @location(0) vec4<f32> {
     let attenuation = 1.0 / (distance * distance);
     let radiance    = light.color * attenuation;
 
-    let albedo    = material.albedo;
+    let albedo = material.albedo.rgb;
     let metallic  = material.metallic;
     let roughness = material.roughness;
     let ao        = material.ao;

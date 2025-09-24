@@ -17,11 +17,23 @@ impl WindowEvents {
     }
 }
 
+#[derive(Resource)]
+pub struct DeviceEvents {
+    pub events: Vec<winit::event::DeviceEvent>,
+}
+
+impl DeviceEvents {
+    pub fn new(events: Vec<winit::event::DeviceEvent>) -> Self {
+        Self { events }
+    }
+}
+
 system!(
     fn input_system(
         input: res &mut Input,
         gpu: res &mut Gpu,
         events: res &mut WindowEvents,
+        device_events: res &mut DeviceEvents,
     ) {
         let Some(events) = events else {
             return;
@@ -32,8 +44,11 @@ system!(
         let Some(gpu) = gpu else {
             return;
         };
+        let Some(device_events) = device_events else {
+            return;
+        };
 
-        input.update(gpu, events);
+        input.update(gpu, events, device_events);
     }
 );
 
@@ -63,7 +78,7 @@ impl Input {
         }
     }
 
-    pub fn update(&mut self, gpu: &mut Gpu, events: &mut WindowEvents) {
+    pub fn update(&mut self, gpu: &mut Gpu, events: &mut WindowEvents, device_events: &mut DeviceEvents) {
         self.key_just_pressed.clear();
         self.mouse_buttons_just_pressed.clear();
         let mut mouse_delta = (0.0, 0.0);
@@ -87,18 +102,34 @@ impl Input {
                     gpu.resize(physical_size);
                 }
                 WindowEvent::CursorMoved { position, .. } => {
-                    if !self.cursor_in_window {
+                    // Only use this for delta if NOT grabbed (raw motion takes priority when grabbed)
+                    if !self.cursor_grabbed {
+                        if !self.cursor_in_window {
+                            self.prev_mouse_pos = (position.x, position.y);
+                            self.cursor_in_window = true;
+                        }
+
+                        mouse_delta.0 = position.x - self.prev_mouse_pos.0;
+                        mouse_delta.1 = position.y - self.prev_mouse_pos.1;
                         self.prev_mouse_pos = (position.x, position.y);
-                        self.cursor_in_window = true;
                     }
-
-                    mouse_delta.0 = position.x - self.prev_mouse_pos.0;
-                    mouse_delta.1 = position.y - self.prev_mouse_pos.1;
-                    self.prev_mouse_pos = (position.x, position.y);
-
                 }
                 WindowEvent::CursorEntered { .. } => {
                     self.cursor_in_window = false;
+                }
+                _ => {}
+            }
+        }
+
+        // Process device events for raw mouse motion (when grabbed)
+        for event in device_events.events.drain(..) {
+            match event {
+                winit::event::DeviceEvent::MouseMotion { delta } => {
+                    // Use raw delta when cursor is grabbed
+                    if self.cursor_grabbed {
+                        mouse_delta.0 += delta.0;
+                        mouse_delta.1 += delta.1;
+                    }
                 }
                 _ => {}
             }

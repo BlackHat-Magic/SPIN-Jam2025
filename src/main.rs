@@ -17,6 +17,7 @@ pub mod utils;
 pub use physics::*;
 use render::Gpu;
 pub use render::model::ModelHandle;
+use render::Material;
 pub use utils::time::*;
 pub use utils::*;
 use utils::input::Input;
@@ -81,12 +82,26 @@ fn main() {
             }
         }
 
+        fn device_event(
+            &mut self,
+            _event_loop: &ActiveEventLoop,
+            _device_id: winit::event::DeviceId,
+            event: winit::event::DeviceEvent,
+        ) {
+            let device_events =
+                World::get_resource_mut::<input::DeviceEvents>(self.app.world);
+            if let Some(device_events) = device_events {
+                device_events.events.push(event);
+            }
+        }
+
         fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
             self.app.run();
         }
     }
 
     app.insert_resource(input::WindowEvents { events: Vec::new() });
+    app.insert_resource(input::DeviceEvents { events: Vec::new() });
 
     let app = WinitApp { app };
 
@@ -108,6 +123,12 @@ system! {
         let entity = commands.spawn_entity();
         commands.add_component(entity, Transform::default());
         commands.add_component(entity, ModelHandle { path: "sphere".into() });
+        commands.add_component(entity, Material {
+            albedo_color: [1.0, 0.0, 0.0, 1.0], // red
+            metallic: 0.0,
+            roughness: 0.5,
+            ao: 1.0,
+        });
 
         let camera_entity = commands.spawn_entity();
         commands.add_component(camera_entity, Transform {
@@ -179,8 +200,8 @@ system! {
 
         let (mouse_dx, mouse_dy) = input.get_mouse_delta();
         if input.cursor_grabbed && (mouse_dx != 0.0 || mouse_dy != 0.0) {
-            let sensitivity = 0.0002;
-            let yaw = mouse_dx as f32 * sensitivity;
+            let sensitivity = 0.0008;
+            let yaw = -mouse_dx as f32 * sensitivity;
             let pitch = -mouse_dy as f32 * sensitivity;
 
             let cur_rot = player_transform.rot;
