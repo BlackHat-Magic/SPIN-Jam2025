@@ -16,6 +16,21 @@ use winit::window::Window;
 
 use wgpu::util::DeviceExt;
 
+#[derive(Resource)]
+pub struct Images {
+    pub images: HashMap<String, ImageBuffer<Rgba<u8>, Vec<u8>>>,
+}
+
+impl Images {
+    pub fn load() -> Result<Self> {
+        let images = gather_dir("textures", |path| {
+            let img = image::open(path).ok()?.to_rgba8();
+            Some(img)
+        })?;
+        Ok(Self { images })
+    }
+}
+
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct MaterialData {

@@ -4,25 +4,10 @@ use anyhow::Result;
 use image::{ImageBuffer, Rgba};
 use wgpu::{Extent3d, TexelCopyBufferLayout, TexelCopyTextureInfo, Texture};
 
-use super::{Displayable, Gpu};
+use super::{Displayable, Gpu, Images};
 
 use crate::utils::gather_dir;
 use crate::*;
-
-#[derive(Resource)]
-pub struct Images {
-    pub images: HashMap<String, ImageBuffer<Rgba<u8>, Vec<u8>>>,
-}
-
-impl Images {
-    pub fn load() -> Result<Self> {
-        let images = gather_dir("sprites", |path| {
-            let img = image::open(path).ok()?.to_rgba8();
-            Some(img)
-        })?;
-        Ok(Self { images })
-    }
-}
 
 #[derive(Clone)]
 pub struct PalleteSwap {
