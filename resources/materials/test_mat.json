@@ -1,6 +1,6 @@
 {
-    "albedo": "rawr",
-    "metallic": "#77",
-    "roughness": "#88",
-    "ao": "#99"
+  "albedo": "rawr",
+  "metallic": "#00",
+  "roughness": "#00",
+  "ao": "#00"
 }

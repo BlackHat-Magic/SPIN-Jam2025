@@ -1,0 +1,14 @@
+[package]
+name = "networking"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+net_derive = { path = "net_derive" }
+ecs = { path = "../ecs" }
+inventory = "0.3.21"
+typeid = "1.0.3"
+lazy_static = "1.5.0"
+rayon = "1.11.0"
+serde = { version = "1.0.219", features = ["alloc", "derive", "rc", "std"] }
+quinn = "0.11.9"

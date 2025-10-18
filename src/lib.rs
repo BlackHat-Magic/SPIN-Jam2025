@@ -4,6 +4,7 @@ pub mod physics;
 pub mod render;
 pub mod utils;
 
+pub use networking::*;
 pub use physics::*;
 pub use render::model::ModelHandle;
 pub use render::{Gpu, Material};

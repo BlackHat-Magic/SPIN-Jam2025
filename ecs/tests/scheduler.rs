@@ -44,10 +44,10 @@ fn scheduler_runs_systems_once_per_tick_in_stage_order() {
     let commands: &Commands = &app;
     let world = commands.world;
 
-    let counter = ecs::World::get_resource::<Counter>(world).unwrap();
+    let counter = unsafe { ecs::World::get_resource::<Counter>(world).unwrap() };
     assert_eq!(counter.0, 11); // writer + reader contributions
 
-    let mut positions = ecs::World::get_components::<Position>(world);
+    let mut positions = unsafe { ecs::World::get_components::<Position>(world) };
     assert_eq!(positions.len(), 1);
     assert_eq!(positions.pop().unwrap().1.0, 1);
 }

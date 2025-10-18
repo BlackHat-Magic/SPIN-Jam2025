@@ -9,6 +9,7 @@ use winit::{
 };
 
 pub use ecs::*;
+pub use networking::*;
 
 pub mod physics;
 pub mod render;
@@ -45,6 +46,7 @@ fn main() {
                 utils::UtilPlugin,
                 physics::PhysicsPlugin,
                 render::RenderPlugin,
+                networking::NetworkingPlugin,
             );
 
             self.app.add_plugin(default_plugins);
@@ -73,8 +75,7 @@ fn main() {
                     self.app.run();
                 }
                 _ => {
-                    let window_events =
-                        World::get_resource_mut::<input::WindowEvents>(self.app.world);
+                    let window_events = self.app.get_resource_mut::<input::WindowEvents>();
                     if let Some(window_events) = window_events {
                         window_events.events.push(event.clone());
                     }
@@ -88,7 +89,7 @@ fn main() {
             _device_id: winit::event::DeviceId,
             event: winit::event::DeviceEvent,
         ) {
-            let device_events = World::get_resource_mut::<input::DeviceEvents>(self.app.world);
+            let device_events = self.app.get_resource_mut::<input::DeviceEvents>();
             if let Some(device_events) = device_events {
                 device_events.events.push(event);
             }
@@ -102,14 +103,13 @@ fn main() {
     app.insert_resource(input::WindowEvents { events: Vec::new() });
     app.insert_resource(input::DeviceEvents { events: Vec::new() });
 
-    let app = WinitApp { app };
+    let mut app = WinitApp { app };
 
     let event_loop = EventLoop::builder()
         .build()
         .expect("Failed to create event loop");
     event_loop.set_control_flow(ControlFlow::Poll);
 
-    let mut app = app;
     event_loop
         .run_app(&mut app)
         .expect("Failed to run event loop");

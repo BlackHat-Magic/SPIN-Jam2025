@@ -127,11 +127,11 @@ impl Commands {
     }
 
     pub fn get_resource<T: Resource>(&mut self) -> Option<&'static T> {
-        World::get_resource::<T>(self.world)
+        unsafe { World::get_resource::<T>(self.world) }
     }
 
     pub fn get_resource_mut<T: Resource>(&mut self) -> Option<&'static mut T> {
-        World::get_resource_mut::<T>(self.world)
+        unsafe { World::get_resource_mut::<T>(self.world) }
     }
 
     pub fn add_system(&mut self, system: impl System, stage: SystemStage) {
@@ -204,7 +204,7 @@ impl Drop for World {
 }
 
 impl World {
-    pub fn new() -> Self {
+    fn new() -> Self {
         let mut resources =
             Vec::with_capacity(RESOURCE_IDS.get_or_init(crate::build_resource_ids).len());
         resources.resize_with(RESOURCE_IDS.get().unwrap().len(), || None);
@@ -219,7 +219,7 @@ impl World {
         }
     }
 
-    pub fn get_resource<T: Resource>(world: *mut World) -> Option<&'static T> {
+    pub unsafe fn get_resource<T: Resource>(world: *mut World) -> Option<&'static T> {
         let id = get_resource_id::<T>() as usize;
         unsafe {
             Some(
@@ -235,7 +235,7 @@ impl World {
         }
     }
 
-    pub fn get_resource_mut<T: Resource>(world: *mut World) -> Option<&'static mut T> {
+    pub unsafe fn get_resource_mut<T: Resource>(world: *mut World) -> Option<&'static mut T> {
         let id = get_resource_id::<T>() as usize;
         unsafe {
             Some(
@@ -251,7 +251,7 @@ impl World {
         }
     }
 
-    pub fn get_components<T: Component>(world: *mut World) -> Vec<(u32, &'static T)> {
+    pub unsafe fn get_components<T: Component>(world: *mut World) -> Vec<(u32, &'static T)> {
         let id = get_component_id::<T>() as usize;
         let mut components = Vec::new();
 
@@ -272,7 +272,9 @@ impl World {
         components
     }
 
-    pub fn get_components_mut<T: Component>(world: *mut World) -> Vec<(u32, &'static mut T)> {
+    pub unsafe fn get_components_mut<T: Component>(
+        world: *mut World,
+    ) -> Vec<(u32, &'static mut T)> {
         let id = get_component_id::<T>() as usize;
         let mut components = Vec::new();
 

@@ -11,7 +11,7 @@ fn component_macro_registers_type_and_allows_access() {
 
     let commands: &Commands = &app;
     let world_ptr = commands.world;
-    let components = World::get_components::<Foo>(world_ptr);
+    let components = unsafe { World::get_components::<Foo>(world_ptr) };
 
     assert_eq!(components.len(), 1);
     assert_eq!(components[0].0, entity);

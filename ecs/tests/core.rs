@@ -22,7 +22,7 @@ fn spawn_entity_assigns_ids_and_entity_component() {
     let commands: &Commands = &app;
     let world = commands.world;
 
-    let entity_ids = World::get_components::<EntityId>(world);
+    let entity_ids = unsafe { World::get_components::<EntityId>(world) };
     let collected: Vec<u32> = entity_ids.into_iter().map(|(_, id)| id.get()).collect();
     assert_eq!(collected, vec![0, 1]);
 }
@@ -32,7 +32,7 @@ fn add_get_and_remove_components_round_trip() {
     let mut app = App::new();
     let entity = app.spawn_entity();
 
-    assert!(app.add_component(entity, Position(3.14)).is_some());
+    assert!(app.add_component(entity, Position(3.0)).is_some());
     assert!(app.add_component(entity, Velocity(2.71)).is_some());
 
     // second insertion should fail without replacing
@@ -41,12 +41,12 @@ fn add_get_and_remove_components_round_trip() {
     let commands: &Commands = &app;
     let world = commands.world;
 
-    let positions = World::get_components::<Position>(world);
+    let positions = unsafe { World::get_components::<Position>(world) };
     assert_eq!(positions.len(), 1);
     assert_eq!(positions[0].0, entity);
-    assert_eq!(*positions[0].1, Position(3.14));
+    assert_eq!(*positions[0].1, Position(3.0));
 
-    let velocities = World::get_components::<Velocity>(world);
+    let velocities = unsafe { World::get_components::<Velocity>(world) };
     assert_eq!(velocities.len(), 1);
     assert_eq!(velocities[0].0, entity);
     assert_eq!(*velocities[0].1, Velocity(2.71));
@@ -56,7 +56,7 @@ fn add_get_and_remove_components_round_trip() {
         .expect("component missing");
     assert!(removed.as_any().downcast_ref::<Position>().is_some());
 
-    let positions = World::get_components::<Position>(world);
+    let positions = unsafe { World::get_components::<Position>(world) };
     assert!(positions.is_empty());
 }
 
@@ -70,7 +70,7 @@ fn insert_resource_overwrites_and_returns_flags() {
     let commands: &Commands = &app;
     let world = commands.world;
 
-    let counter = World::get_resource::<Counter>(world).expect("resource missing");
+    let counter = unsafe { World::get_resource::<Counter>(world).expect("resource missing") };
     assert_eq!(*counter, Counter(5));
 }
 
@@ -95,7 +95,7 @@ fn systems_modify_components_via_scheduler() {
     let commands: &Commands = &app;
     let world = commands.world;
 
-    let positions = World::get_components::<Position>(world);
+    let positions = unsafe { World::get_components::<Position>(world) };
     assert_eq!(positions[0].1.0, 5.0);
 }
 
@@ -113,7 +113,7 @@ fn despawn_entity_removes_components() {
     let commands: &Commands = &app;
     let world = commands.world;
 
-    let positions = World::get_components::<Position>(world);
+    let positions = unsafe { World::get_components::<Position>(world) };
     assert_eq!(positions.len(), 1);
     assert_eq!(positions[0].0, e1);
 }

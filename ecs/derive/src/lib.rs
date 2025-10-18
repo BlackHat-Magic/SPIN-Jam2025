@@ -352,11 +352,11 @@ fn handle_query(
             names.push(var_name.clone());
             if *is_mut {
                 gather_code.extend(quote! {
-                    let #var_name = World::get_components_mut::<#ty>(world);
+                    let #var_name = unsafe { World::get_components_mut::<#ty>(world) };
                 });
             } else {
                 gather_code.extend(quote! {
-                    let #var_name = World::get_components::<#ty>(world);
+                    let #var_name = unsafe { World::get_components::<#ty>(world) };
                 });
             }
         }
@@ -447,7 +447,7 @@ fn handle_resource(
                             }
                             mutable_resources.push(res_ty.clone());
                             return Some(quote! {
-                                let mut #arg_name = World::get_resource_mut::<#res_ty>(world);
+                                let mut #arg_name = unsafe { World::get_resource_mut::<#res_ty>(world) };
                             });
                         }
                     } else {
@@ -463,7 +463,7 @@ fn handle_resource(
                                 shared_resources.push(res_ty.clone());
                             }
                             return Some(quote! {
-                                let mut #arg_name = World::get_resource::<#res_ty>(world);
+                                let mut #arg_name = unsafe { World::get_resource::<#res_ty>(world) };
                             });
                         }
                     }

@@ -32,14 +32,14 @@ unsafe impl Send for SystemWrapper {}
 unsafe impl Sync for SystemWrapper {}
 
 impl Scheduler {
-    pub fn new(world: *mut World) -> Self {
+    pub(crate) fn new(world: *mut World) -> Self {
         Self {
             world,
             systems: HashMap::new(),
         }
     }
 
-    pub fn run(scheduler: *mut Scheduler, stage: SystemStage) {
+    pub(crate) fn run(scheduler: *mut Scheduler, stage: SystemStage) {
         unsafe {
             let world = (*scheduler).world;
             let Some(systems) = (*scheduler).systems.get(&stage) else {
@@ -68,7 +68,7 @@ impl Scheduler {
         }
     }
 
-    pub fn add_system(&mut self, system: *mut dyn System, stage: SystemStage) {
+    pub(crate) fn add_system(&mut self, system: *mut dyn System, stage: SystemStage) {
         let entry = self.systems.entry(stage).or_insert_with(Vec::new);
         if unsafe { system.as_ref() }.unwrap().runs_alone() || entry.is_empty() {
             entry.push(vec![system]);
