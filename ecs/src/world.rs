@@ -126,6 +126,14 @@ impl Commands {
         }
     }
 
+    pub fn get_resource<T: Resource>(&mut self) -> Option<&'static T> {
+        World::get_resource::<T>(self.world)
+    }
+
+    pub fn get_resource_mut<T: Resource>(&mut self) -> Option<&'static mut T> {
+        World::get_resource_mut::<T>(self.world)
+    }
+
     pub fn add_system(&mut self, system: impl System, stage: SystemStage) {
         unsafe {
             let world = self.world.as_mut().unwrap();

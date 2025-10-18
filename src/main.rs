@@ -15,26 +15,15 @@ pub mod render;
 pub mod utils;
 
 pub use physics::*;
-use render::Gpu;
-use render::Material;
 pub use render::model::ModelHandle;
+use render::sprite::*;
+use render::*;
 use utils::input::Input;
 pub use utils::time::*;
 pub use utils::*;
 
 fn main() {
-    let default_plugins = plugin_group!(
-        utils::UtilPlugin,
-        physics::PhysicsPlugin,
-        render::RenderPlugin,
-    );
-
     let mut app = App::new();
-
-    app.add_plugin(default_plugins);
-    app.add_system(update_time, SystemStage::PreUpdate);
-    app.add_system(control_player, SystemStage::Update);
-    app.add_system(init_scene, SystemStage::Init);
 
     struct WinitApp {
         app: App,
@@ -51,6 +40,19 @@ fn main() {
 
             let gpu = pollster::block_on(Gpu::new(Arc::new(window)));
             self.app.insert_resource(gpu);
+
+            let default_plugins = plugin_group!(
+                utils::UtilPlugin,
+                physics::PhysicsPlugin,
+                render::RenderPlugin,
+            );
+
+            self.app.add_plugin(default_plugins);
+
+            self.app.add_system(update_time, SystemStage::PreUpdate);
+            self.app.add_system(display_sprite, SystemStage::Update);
+            self.app.add_system(control_player, SystemStage::Update);
+            self.app.add_system(init_scene, SystemStage::Init);
 
             self.app.init();
             self.app.run();
@@ -111,12 +113,24 @@ fn main() {
     event_loop
         .run_app(&mut app)
         .expect("Failed to run event loop");
+
+    // Makes call to std::process::exit to avoid double drop of resources
+    std::process::exit(0);
 }
 
 system! {
     fn init_scene(
-        commands: commands
+        images: res &Images,
+        gpu: res &Gpu,
+        commands: commands,
     ) {
+        let (Some(gpu), Some(images)) = (gpu, images) else {
+            return;
+        };
+
+        let sprite = commands.spawn_entity();
+        commands.add_component(sprite, SpriteBuilder::default().build(gpu, images));
+
         let entity = commands.spawn_entity();
         commands.add_component(entity, Transform::default());
         commands.add_component(entity, ModelHandle { path: "sphere".into() });
@@ -140,6 +154,21 @@ system! {
             0.1,
             100.0,
         ));
+    }
+}
+
+system! {
+    fn display_sprite(
+        gpu: res &mut Gpu,
+        sprites: query (&Sprite),
+    ) {
+        let Some(gpu) = gpu else {
+            return;
+        };
+
+        for sprite in sprites {
+            gpu.display(sprite, (0.5, 0.5), (0.01, 0.01), 0.0, Align::Center);
+        }
     }
 }
 

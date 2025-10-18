@@ -1,7 +1,7 @@
 use klaus_of_death::physics::{
     AngularVelocity, BodyInit, Camera, Collider, ForceAccumulator, PhysicsDebugSettings,
-    PhysicsEvents, PhysicsPlugin, PhysicsTestWorld, PhysicsTime, PhysicsWorld, RigidBody, Transform,
-    Velocity,
+    PhysicsEvents, PhysicsPlugin, PhysicsTestWorld, PhysicsTime, PhysicsWorld, RigidBody,
+    Transform, Velocity,
 };
 use klaus_of_death::{App, Commands, World};
 
@@ -19,127 +19,129 @@ fn assert_mat4_close(a: Mat4, b: Mat4, epsilon: f32) {
         );
     }
 
-#[test]
-fn physics_world_broad_phase_pairs_are_deterministic() {
-    let mut app = App::new();
-    app.add_plugin(PhysicsPlugin);
+    #[test]
+    fn physics_world_broad_phase_pairs_are_deterministic() {
+        let mut app = App::new();
+        app.add_plugin(PhysicsPlugin);
 
-    let e1 = app.spawn_entity();
-    app.add_component(e1, Transform::default()).unwrap();
-    app.add_component(e1, RigidBody::dynamic(1.0)).unwrap();
-    app.add_component(e1, Collider::sphere(0.5)).unwrap();
-    app.add_component(e1, Velocity(Vec3::ZERO)).unwrap();
-    app.add_component(e1, AngularVelocity(Vec3::ZERO)).unwrap();
-    app.add_component(e1, ForceAccumulator(Vec3::ZERO)).unwrap();
+        let e1 = app.spawn_entity();
+        app.add_component(e1, Transform::default()).unwrap();
+        app.add_component(e1, RigidBody::dynamic(1.0)).unwrap();
+        app.add_component(e1, Collider::sphere(0.5)).unwrap();
+        app.add_component(e1, Velocity(Vec3::ZERO)).unwrap();
+        app.add_component(e1, AngularVelocity(Vec3::ZERO)).unwrap();
+        app.add_component(e1, ForceAccumulator(Vec3::ZERO)).unwrap();
 
-    let mut t2 = Transform::default();
-    t2.pos = Vec3::new(0.25, 0.0, 0.0);
-    let e2 = app.spawn_entity();
-    app.add_component(e2, t2).unwrap();
-    app.add_component(e2, RigidBody::dynamic(1.0)).unwrap();
-    app.add_component(e2, Collider::sphere(0.5)).unwrap();
-    app.add_component(e2, Velocity(Vec3::ZERO)).unwrap();
-    app.add_component(e2, AngularVelocity(Vec3::ZERO)).unwrap();
-    app.add_component(e2, ForceAccumulator(Vec3::ZERO)).unwrap();
+        let mut t2 = Transform::default();
+        t2.pos = Vec3::new(0.25, 0.0, 0.0);
+        let e2 = app.spawn_entity();
+        app.add_component(e2, t2).unwrap();
+        app.add_component(e2, RigidBody::dynamic(1.0)).unwrap();
+        app.add_component(e2, Collider::sphere(0.5)).unwrap();
+        app.add_component(e2, Velocity(Vec3::ZERO)).unwrap();
+        app.add_component(e2, AngularVelocity(Vec3::ZERO)).unwrap();
+        app.add_component(e2, ForceAccumulator(Vec3::ZERO)).unwrap();
 
-    let mut t3 = Transform::default();
-    t3.pos = Vec3::new(5.0, 0.0, 0.0);
-    let e3 = app.spawn_entity();
-    app.add_component(e3, t3).unwrap();
-    app.add_component(e3, RigidBody::dynamic(1.0)).unwrap();
-    app.add_component(e3, Collider::sphere(0.5)).unwrap();
-    app.add_component(e3, Velocity(Vec3::ZERO)).unwrap();
-    app.add_component(e3, AngularVelocity(Vec3::ZERO)).unwrap();
-    app.add_component(e3, ForceAccumulator(Vec3::ZERO)).unwrap();
+        let mut t3 = Transform::default();
+        t3.pos = Vec3::new(5.0, 0.0, 0.0);
+        let e3 = app.spawn_entity();
+        app.add_component(e3, t3).unwrap();
+        app.add_component(e3, RigidBody::dynamic(1.0)).unwrap();
+        app.add_component(e3, Collider::sphere(0.5)).unwrap();
+        app.add_component(e3, Velocity(Vec3::ZERO)).unwrap();
+        app.add_component(e3, AngularVelocity(Vec3::ZERO)).unwrap();
+        app.add_component(e3, ForceAccumulator(Vec3::ZERO)).unwrap();
 
-    app.run();
+        app.run();
 
-    let commands: &Commands = &app;
-    let world_ptr = commands.world;
-    let physics_world = World::get_resource::<PhysicsWorld>(world_ptr).unwrap();
+        let commands: &Commands = &app;
+        let world_ptr = commands.world;
+        let physics_world = World::get_resource::<PhysicsWorld>(world_ptr).unwrap();
 
-    let pairs = physics_world.broad_phase_pairs();
-    assert_eq!(pairs, &[(e1, e2)]);
+        let pairs = physics_world.broad_phase_pairs();
+        assert_eq!(pairs, &[(e1, e2)]);
 
-    // Running again without changes should yield the same ordering.
-    app.run();
-    let physics_world = World::get_resource::<PhysicsWorld>(world_ptr).unwrap();
-    assert_eq!(physics_world.broad_phase_pairs(), &[(e1, e2)]);
-}
-
-#[test]
-fn physics_world_broad_phase_pairs_respect_axis_ordering() {
-    let mut app = App::new();
-    app.add_plugin(PhysicsPlugin);
-
-    let mut transforms = [
-        Vec3::new(-1.5, 0.0, 0.0),
-        Vec3::new(-0.5, 0.0, 0.0),
-        Vec3::new(0.5, 0.0, 0.0),
-        Vec3::new(1.5, 0.0, 0.0),
-    ];
-
-    let mut entities = Vec::new();
-    for pos in transforms.iter_mut() {
-        let mut t = Transform::default();
-        t.pos = *pos;
-        let entity = app.spawn_entity();
-        app.add_component(entity, t).unwrap();
-        app.add_component(entity, RigidBody::dynamic(1.0)).unwrap();
-        app.add_component(entity, Collider::sphere(0.75)).unwrap();
-        app.add_component(entity, Velocity(Vec3::ZERO)).unwrap();
-        app.add_component(entity, AngularVelocity(Vec3::ZERO)).unwrap();
-        app.add_component(entity, ForceAccumulator(Vec3::ZERO)).unwrap();
-        entities.push(entity);
+        // Running again without changes should yield the same ordering.
+        app.run();
+        let physics_world = World::get_resource::<PhysicsWorld>(world_ptr).unwrap();
+        assert_eq!(physics_world.broad_phase_pairs(), &[(e1, e2)]);
     }
 
-    app.run();
+    #[test]
+    fn physics_world_broad_phase_pairs_respect_axis_ordering() {
+        let mut app = App::new();
+        app.add_plugin(PhysicsPlugin);
 
-    let commands: &Commands = &app;
-    let world_ptr = commands.world;
-    let physics_world = World::get_resource::<PhysicsWorld>(world_ptr).unwrap();
+        let mut transforms = [
+            Vec3::new(-1.5, 0.0, 0.0),
+            Vec3::new(-0.5, 0.0, 0.0),
+            Vec3::new(0.5, 0.0, 0.0),
+            Vec3::new(1.5, 0.0, 0.0),
+        ];
 
-    let expected_pairs = vec![
-        (entities[0].min(entities[1]), entities[0].max(entities[1])),
-        (entities[1].min(entities[2]), entities[1].max(entities[2])),
-        (entities[2].min(entities[3]), entities[2].max(entities[3])),
-    ];
+        let mut entities = Vec::new();
+        for pos in transforms.iter_mut() {
+            let mut t = Transform::default();
+            t.pos = *pos;
+            let entity = app.spawn_entity();
+            app.add_component(entity, t).unwrap();
+            app.add_component(entity, RigidBody::dynamic(1.0)).unwrap();
+            app.add_component(entity, Collider::sphere(0.75)).unwrap();
+            app.add_component(entity, Velocity(Vec3::ZERO)).unwrap();
+            app.add_component(entity, AngularVelocity(Vec3::ZERO))
+                .unwrap();
+            app.add_component(entity, ForceAccumulator(Vec3::ZERO))
+                .unwrap();
+            entities.push(entity);
+        }
 
-    assert_eq!(physics_world.broad_phase_pairs(), expected_pairs);
-}
+        app.run();
 
-#[test]
-fn physics_events_emit_broad_phase_pairs() {
-    let mut app = App::new();
-    app.add_plugin(PhysicsPlugin);
+        let commands: &Commands = &app;
+        let world_ptr = commands.world;
+        let physics_world = World::get_resource::<PhysicsWorld>(world_ptr).unwrap();
 
-    let mut t1 = Transform::default();
-    t1.pos = Vec3::new(-0.25, 0.0, 0.0);
-    let e1 = app.spawn_entity();
-    app.add_component(e1, t1).unwrap();
-    app.add_component(e1, RigidBody::dynamic(1.0)).unwrap();
-    app.add_component(e1, Collider::sphere(0.6)).unwrap();
-    app.add_component(e1, Velocity(Vec3::ZERO)).unwrap();
-    app.add_component(e1, AngularVelocity(Vec3::ZERO)).unwrap();
-    app.add_component(e1, ForceAccumulator(Vec3::ZERO)).unwrap();
+        let expected_pairs = vec![
+            (entities[0].min(entities[1]), entities[0].max(entities[1])),
+            (entities[1].min(entities[2]), entities[1].max(entities[2])),
+            (entities[2].min(entities[3]), entities[2].max(entities[3])),
+        ];
 
-    let mut t2 = Transform::default();
-    t2.pos = Vec3::new(0.25, 0.0, 0.0);
-    let e2 = app.spawn_entity();
-    app.add_component(e2, t2).unwrap();
-    app.add_component(e2, RigidBody::dynamic(1.0)).unwrap();
-    app.add_component(e2, Collider::sphere(0.6)).unwrap();
-    app.add_component(e2, Velocity(Vec3::ZERO)).unwrap();
-    app.add_component(e2, AngularVelocity(Vec3::ZERO)).unwrap();
-    app.add_component(e2, ForceAccumulator(Vec3::ZERO)).unwrap();
+        assert_eq!(physics_world.broad_phase_pairs(), expected_pairs);
+    }
 
-    app.run();
+    #[test]
+    fn physics_events_emit_broad_phase_pairs() {
+        let mut app = App::new();
+        app.add_plugin(PhysicsPlugin);
 
-    let commands: &Commands = &app;
-    let world_ptr = commands.world;
-    let events = World::get_resource::<PhysicsEvents>(world_ptr).unwrap();
-    assert_eq!(events.broad_phase_pairs, vec![(e1.min(e2), e1.max(e2))]);
-}
+        let mut t1 = Transform::default();
+        t1.pos = Vec3::new(-0.25, 0.0, 0.0);
+        let e1 = app.spawn_entity();
+        app.add_component(e1, t1).unwrap();
+        app.add_component(e1, RigidBody::dynamic(1.0)).unwrap();
+        app.add_component(e1, Collider::sphere(0.6)).unwrap();
+        app.add_component(e1, Velocity(Vec3::ZERO)).unwrap();
+        app.add_component(e1, AngularVelocity(Vec3::ZERO)).unwrap();
+        app.add_component(e1, ForceAccumulator(Vec3::ZERO)).unwrap();
+
+        let mut t2 = Transform::default();
+        t2.pos = Vec3::new(0.25, 0.0, 0.0);
+        let e2 = app.spawn_entity();
+        app.add_component(e2, t2).unwrap();
+        app.add_component(e2, RigidBody::dynamic(1.0)).unwrap();
+        app.add_component(e2, Collider::sphere(0.6)).unwrap();
+        app.add_component(e2, Velocity(Vec3::ZERO)).unwrap();
+        app.add_component(e2, AngularVelocity(Vec3::ZERO)).unwrap();
+        app.add_component(e2, ForceAccumulator(Vec3::ZERO)).unwrap();
+
+        app.run();
+
+        let commands: &Commands = &app;
+        let world_ptr = commands.world;
+        let events = World::get_resource::<PhysicsEvents>(world_ptr).unwrap();
+        assert_eq!(events.broad_phase_pairs, vec![(e1.min(e2), e1.max(e2))]);
+    }
 }
 
 #[test]
@@ -371,8 +373,10 @@ fn physics_plugin_applies_gravity_and_forces() {
     app.add_component(entity, Collider::sphere(0.25)).unwrap();
     app.add_component(entity, Transform::default()).unwrap();
     app.add_component(entity, Velocity(Vec3::ZERO)).unwrap();
-    app.add_component(entity, AngularVelocity(Vec3::new(0.0, 1.0, 0.0))).unwrap();
-    app.add_component(entity, ForceAccumulator(Vec3::new(4.0, 0.0, 0.0))).unwrap();
+    app.add_component(entity, AngularVelocity(Vec3::new(0.0, 1.0, 0.0)))
+        .unwrap();
+    app.add_component(entity, ForceAccumulator(Vec3::new(4.0, 0.0, 0.0)))
+        .unwrap();
 
     {
         let commands: &Commands = &app;

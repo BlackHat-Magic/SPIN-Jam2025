@@ -4,6 +4,7 @@ pub mod sprite;
 use crate::*;
 
 use model::{Model, ModelHandle};
+use sprite::*;
 
 use crate::physics::{Camera, Transform};
 
@@ -37,9 +38,16 @@ pub struct RenderPlugin;
 
 impl Plugin for RenderPlugin {
     fn build(&self, app: &mut App) {
+        let gpu = app.get_resource_mut::<Gpu>().unwrap();
+        app.insert_resource(Images::load().expect("Failed to load images"));
+
+        let shaders = Shaders::load(gpu);
+        app.insert_resource(shaders);
+
+        let models = Models::load(gpu);
+        app.insert_resource(models);
+
         app.add_system(render_system, SystemStage::Render);
-        app.add_system(init_shaders, SystemStage::Init);
-        app.add_system(init_models, SystemStage::Init);
     }
 }
 
@@ -359,16 +367,6 @@ impl Shaders {
     }
 }
 
-system!(
-    fn init_shaders(
-        gpu: res &Gpu,
-        commands: commands
-    ) {
-        let shaders = Shaders::load(gpu.unwrap());
-        commands.insert_resource(shaders);
-    }
-);
-
 #[derive(Resource)]
 pub struct Models {
     pub models: HashMap<String, Model>,
@@ -381,16 +379,6 @@ impl Models {
         Self { models }
     }
 }
-
-system!(
-    fn init_models(
-        gpu: res &Gpu,
-        commands: commands,
-    ) {
-        let models = Models::load(gpu.unwrap());
-        commands.insert_resource(models);
-    }
-);
 
 impl Gpu {
     pub async fn new(window: Arc<Window>) -> Self {
@@ -534,6 +522,7 @@ system!(
             .surface
             .get_current_texture()
             .expect("failed to acquire next swapchain texture");
+
         let texture_view = surface_texture
             .texture
             .create_view(&wgpu::TextureViewDescriptor {
@@ -541,139 +530,160 @@ system!(
                 ..Default::default()
             });
 
-        let mut encoder = gpu.device.create_command_encoder(&Default::default());
-
         if let Some((transform, camera)) = camera.next() {
-            let depth_view_option = gpu.depth_texture.as_ref().map(|tex| {
-                tex.create_view(&wgpu::TextureViewDescriptor::default())
-            });
+            let mut encoder = gpu.device.create_command_encoder(&Default::default());
+            {
+                let depth_view_option = gpu.depth_texture.as_ref().map(|tex| {
+                    tex.create_view(&wgpu::TextureViewDescriptor::default())
+                });
 
-            let mut renderpass_desc = wgpu::RenderPassDescriptor {
-                label: None,
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &texture_view,
-                    depth_slice: None,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.1,
-                            g: 0.2,
-                            b: 0.3,
-                            a: 1.0,
+                let mut renderpass_desc = wgpu::RenderPassDescriptor {
+                    label: None,
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &texture_view,
+                        depth_slice: None,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color {
+                                r: 0.1,
+                                g: 0.2,
+                                b: 0.3,
+                                a: 1.0,
+                            }),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                };
+
+                if let Some(depth_view) = depth_view_option.as_ref() {
+                    renderpass_desc.depth_stencil_attachment = Some(wgpu::RenderPassDepthStencilAttachment {
+                        view: depth_view,
+                        depth_ops: Some(wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(1.0),
+                            store: wgpu::StoreOp::Store,
                         }),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-            };
+                        stencil_ops: None,
+                    });
+                }
 
-            if let Some(depth_view) = depth_view_option.as_ref() {
-                renderpass_desc.depth_stencil_attachment = Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: depth_view,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0),
-                        store: wgpu::StoreOp::Store,
-                    }),
-                    stencil_ops: None,
-                });
+                let projection_matrix = camera.projection_matrix();
+                let projection_matrix = projection_matrix.to_cols_array_2d();
+
+                let view_matrix = transform.to_view_matrix();
+                let view_matrix = view_matrix.to_cols_array_2d();
+
+                let mut renderpass = encoder.begin_render_pass(&renderpass_desc);
+
+                for model in to_display {
+                    let (transform, model_handle, material) = model;
+
+                    let Some(model) = models.models.get(&model_handle.path) else {
+                        eprintln!("Model not found: {}", model_handle.path);
+                        continue;
+                    };
+
+                    let model_matrix = transform.to_matrix();
+                    let model_matrix = model_matrix.to_cols_array_2d();
+
+
+                    let uniforms_data = [
+                        model_matrix,
+                        view_matrix,
+                        projection_matrix,
+                    ];
+
+                    let uniforms_buffer = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("Uniforms Buffer"),
+                        contents: bytemuck::cast_slice(&uniforms_data),
+                        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                    });
+
+                    let light_data: [f32; 8] = [
+                        2.0, 5.0, -2.0, 0.0, // position (vec3 + padding)
+                        1.0, 1.0, 1.0, 0.0, // color (vec3 + padding)
+                    ];
+
+                    let light_buffer = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("Light Buffer"),
+                        contents: bytemuck::cast_slice(&light_data),
+                        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                    });
+
+                    let camera_data: [f32; 4] = [0.0, 0.0, 5.0, 0.0]; // position + padding
+                    let camera_buffer = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("Camera Buffer"),
+                        contents: bytemuck::cast_slice(&camera_data),
+                        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                    });
+
+                    let material_data = MaterialData {
+                        albedo: material.albedo_color,
+                        metallic: material.metallic,
+                        roughness: material.roughness,
+                        ao: material.ao,
+                        padding: 0.0,
+                    };
+
+                    let material_buffer = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("Material Buffer"),
+                        contents: bytemuck::cast_slice(&[material_data]),
+                        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                    });
+
+                    let bind_group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                        label: Some("Model Bind Group"),
+                        layout: &shaders.model_bind_group_layout,
+                        entries: &[
+                            wgpu::BindGroupEntry {
+                                binding: 0,
+                                resource: uniforms_buffer.as_entire_binding(),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 1,
+                                resource: light_buffer.as_entire_binding(),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 2,
+                                resource: camera_buffer.as_entire_binding(),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 3,
+                                resource: material_buffer.as_entire_binding(),
+                            },
+                        ],
+                    });
+
+                    renderpass.set_pipeline(&shaders.model_pipeline);
+                    renderpass.set_bind_group(0, &bind_group, &[]);
+                    model.render(&mut renderpass);
+                }
             }
 
-            let projection_matrix = camera.projection_matrix();
-            let projection_matrix = projection_matrix.to_cols_array_2d();
-
-            let view_matrix = transform.to_view_matrix();
-            let view_matrix = view_matrix.to_cols_array_2d();
-
-            let mut renderpass = encoder.begin_render_pass(&renderpass_desc);
-
-            for model in to_display {
-                let (transform, model_handle, material) = model;
-
-                let Some(model) = models.models.get(&model_handle.path) else {
-                    eprintln!("Model not found: {}", model_handle.path);
-                    continue;
-                };
-
-                let model_matrix = transform.to_matrix();
-                let model_matrix = model_matrix.to_cols_array_2d();
-
-
-                let uniforms_data = [
-                    model_matrix,
-                    view_matrix,
-                    projection_matrix,
-                ];
-
-                let uniforms_buffer = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("Uniforms Buffer"),
-                    contents: bytemuck::cast_slice(&uniforms_data),
-                    usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-                });
-
-                let light_data: [f32; 8] = [
-                    2.0, 5.0, -2.0, 0.0, // position (vec3 + padding)
-                    1.0, 1.0, 1.0, 0.0, // color (vec3 + padding)
-                ];
-
-                let light_buffer = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("Light Buffer"),
-                    contents: bytemuck::cast_slice(&light_data),
-                    usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-                });
-
-                let camera_data: [f32; 4] = [0.0, 0.0, 5.0, 0.0]; // position + padding
-                let camera_buffer = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("Camera Buffer"),
-                    contents: bytemuck::cast_slice(&camera_data),
-                    usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-                });
-
-                let material_data = MaterialData {
-                    albedo: material.albedo_color,
-                    metallic: material.metallic,
-                    roughness: material.roughness,
-                    ao: material.ao,
-                    padding: 0.0,
-                };
-
-                let material_buffer = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("Material Buffer"),
-                    contents: bytemuck::cast_slice(&[material_data]),
-                    usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-                });
-
-                let bind_group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some("Model Bind Group"),
-                    layout: &shaders.model_bind_group_layout,
-                    entries: &[
-                        wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: uniforms_buffer.as_entire_binding(),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 1,
-                            resource: light_buffer.as_entire_binding(),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 2,
-                            resource: camera_buffer.as_entire_binding(),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 3,
-                            resource: material_buffer.as_entire_binding(),
-                        },
-                    ],
-                });
-
-                renderpass.set_pipeline(&shaders.model_pipeline);
-                renderpass.set_bind_group(0, &bind_group, &[]);
-                model.render(&mut renderpass);
-            }
+            gpu.queue.submit([encoder.finish()]);
+            let mut encoder = gpu.device.create_command_encoder(&Default::default());
 
             // Render quads in the same render pass
             {
+                let mut renderpass_desc = wgpu::RenderPassDescriptor {
+                    label: None,
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &texture_view,
+                        depth_slice: None,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Load,
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                };
+
+                let mut renderpass = encoder.begin_render_pass(&renderpass_desc);
                 let index_buffer = gpu
                     .device
                     .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -745,9 +755,9 @@ system!(
                     renderpass.draw_indexed(0..6, 0, 0..1);
                 });
             }
+            gpu.queue.submit([encoder.finish()]);
         }
 
-        gpu.queue.submit([encoder.finish()]);
         gpu.window.pre_present_notify();
         surface_texture.present();
 

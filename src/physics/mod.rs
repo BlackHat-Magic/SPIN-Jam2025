@@ -222,7 +222,10 @@ impl PhysicsBody {
                 );
                 (self.position - extents, self.position + extents)
             }
-            Collider::Capsule { half_height, radius } => {
+            Collider::Capsule {
+                half_height,
+                radius,
+            } => {
                 let radial = radius.abs();
                 let half_height = half_height.abs();
                 let extents = Vec3::new(
@@ -236,6 +239,7 @@ impl PhysicsBody {
     }
 }
 
+#[inline]
 fn aabb_overlap(min_a: Vec3, max_a: Vec3, min_b: Vec3, max_b: Vec3) -> bool {
     !(max_a.x < min_b.x
         || max_b.x < min_a.x

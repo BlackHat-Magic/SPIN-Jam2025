@@ -1,12 +1,30 @@
-use std::path::PathBuf;
+use std::collections::HashMap;
 
+use anyhow::Result;
 use image::{ImageBuffer, Rgba};
 use wgpu::{Extent3d, TexelCopyBufferLayout, TexelCopyTextureInfo, Texture};
 
 use super::{Displayable, Gpu};
 
+use crate::utils::gather_dir;
 use crate::*;
 
+#[derive(Resource)]
+pub struct Images {
+    pub images: HashMap<String, ImageBuffer<Rgba<u8>, Vec<u8>>>,
+}
+
+impl Images {
+    pub fn load() -> Result<Self> {
+        let images = gather_dir("sprites", |path| {
+            let img = image::open(path).ok()?.to_rgba8();
+            Some(img)
+        })?;
+        Ok(Self { images })
+    }
+}
+
+#[derive(Clone)]
 pub struct PalleteSwap {
     pub from: Vec<Rgba<u8>>,
     pub to: Vec<Rgba<u8>>,
@@ -98,7 +116,7 @@ pub struct SpriteBuilder {
     pub x: u8,
     pub y: u8,
 
-    pub image_path: PathBuf,
+    pub image_path: String,
     pub pallete_swap: Option<PalleteSwap>,
 }
 
@@ -110,16 +128,19 @@ impl Default for SpriteBuilder {
             x: 0,
             y: 0,
 
-            image_path: crate::get_resource_path("sprites/rawr.png"),
+            image_path: "rawr".to_string(),
             pallete_swap: None,
         }
     }
 }
 
 impl SpriteBuilder {
-    pub fn build(&self, gpu: &Gpu) -> Sprite {
-        let img = image::open(&self.image_path).expect("Failed to open image");
-        let mut img = img.to_rgba8();
+    pub fn build(&self, gpu: &Gpu, images: &Images) -> Sprite {
+        let img = images
+            .images
+            .get(&self.image_path)
+            .expect("Failed to load image");
+        let mut img = img.clone();
 
         if let Some(pallete_swap) = &self.pallete_swap {
             pallete_swap.apply(&mut img);
@@ -189,6 +210,7 @@ pub struct Animation {
     pub current_frame: usize,
 
     pub looping: bool,
+    pub running: bool,
 }
 
 impl Displayable for Animation {
@@ -198,31 +220,32 @@ impl Displayable for Animation {
 }
 
 impl Animation {
-    pub fn from_frames(frames: Vec<Sprite>, speed: f32, looping: bool) -> Self {
+    pub fn from_frames(frames: Vec<Sprite>, speed: f32, looping: bool, running: bool) -> Self {
         Self {
             frames,
             time_between_frames: if speed == 0.0 { f32::MAX } else { 1.0 / speed },
             time_accumulator: 0.0,
             current_frame: 0,
             looping,
+            running,
         }
     }
 
     pub fn from_spritesheet(
-        path: PathBuf,
+        path: String,
         gpu: &Gpu,
+        images: &Images,
         pallete_swap: Option<PalleteSwap>,
         frame_w: u8,
         frame_h: u8,
         speed: f32,
         looping: bool,
+        running: bool,
     ) -> Self {
-        let img = image::open(&path).expect("Failed to open image");
-        let mut img = img.to_rgba8();
-
-        if let Some(pallete_swap) = &pallete_swap {
-            pallete_swap.apply(&mut img);
-        }
+        let img = images
+            .images
+            .get(&path)
+            .expect("Failed to load spritesheet");
 
         let (sheet_w, sheet_h) = img.dimensions();
         let cols = sheet_w / frame_w as u32;
@@ -237,9 +260,9 @@ impl Animation {
                     x: (x * frame_w as u32) as u8,
                     y: (y * frame_h as u32) as u8,
                     image_path: path.clone(),
-                    pallete_swap: None,
+                    pallete_swap: pallete_swap.clone(),
                 }
-                .build(gpu);
+                .build(gpu, images);
 
                 frames.push(sprite);
             }
@@ -251,14 +274,27 @@ impl Animation {
             time_accumulator: 0.0,
             current_frame: 0,
             looping,
+            running,
         }
     }
 
+    pub fn start(&mut self) {
+        self.running = true;
+    }
+
+    pub fn stop(&mut self) {
+        self.running = false;
+    }
+
     pub fn update(&mut self, delta_time: f32) {
+        if !self.running {
+            return;
+        }
         self.time_accumulator += delta_time;
         while self.time_accumulator >= self.time_between_frames {
             if !self.looping && self.current_frame == self.frames.len() - 1 {
-                self.time_accumulator = f32::MIN;
+                self.running = false;
+                return;
             }
             self.current_frame = (self.current_frame + 1) % self.frames.len();
             self.time_accumulator -= self.time_between_frames;
@@ -296,3 +332,18 @@ impl Animation {
         !self.looping && self.current_frame == self.frames.len() - 1
     }
 }
+
+system!(
+    fn update_animations(
+        time: res &Time,
+        anims: query (&mut Animation),
+    ) {
+        let Some(time) = time else {
+            return;
+        };
+
+        for anim in anims {
+            anim.update(time.delta_seconds);
+        }
+    }
+);
