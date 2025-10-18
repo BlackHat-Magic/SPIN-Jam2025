@@ -16,13 +16,15 @@ fn time_systems_initialize_and_update_delta() {
     let commands: &Commands = &app;
     let world_ptr = commands.world;
 
-    let time = World::get_resource::<Time>(world_ptr).expect("Time resource not initialized");
+    let time =
+        unsafe { World::get_resource::<Time>(world_ptr).expect("Time resource not initialized") };
     assert_eq!(time.delta_seconds, 0.0);
 
     thread::sleep(Duration::from_millis(5));
 
     app.run();
 
-    let time = World::get_resource::<Time>(world_ptr).expect("Time resource not present");
+    let time =
+        unsafe { World::get_resource::<Time>(world_ptr).expect("Time resource not present") };
     assert!(time.delta_seconds > 0.0);
 }

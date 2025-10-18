@@ -50,6 +50,7 @@ fn systems_execute_in_defined_stage_order() {
 
     let commands: &Commands = &app;
     let world_ptr = commands.world;
-    let log = World::get_resource::<StageLog>(world_ptr).expect("StageLog resource not found");
+    let log =
+        unsafe { World::get_resource::<StageLog>(world_ptr).expect("StageLog resource not found") };
     assert_eq!(log.0, vec!["pre", "update", "post", "render"]);
 }

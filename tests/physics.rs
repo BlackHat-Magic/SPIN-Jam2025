@@ -56,14 +56,14 @@ fn assert_mat4_close(a: Mat4, b: Mat4, epsilon: f32) {
 
         let commands: &Commands = &app;
         let world_ptr = commands.world;
-        let physics_world = World::get_resource::<PhysicsWorld>(world_ptr).unwrap();
+        let physics_world = unsafe { World::get_resource::<PhysicsWorld>(world_ptr).unwrap() };
 
         let pairs = physics_world.broad_phase_pairs();
         assert_eq!(pairs, &[(e1, e2)]);
 
         // Running again without changes should yield the same ordering.
         app.run();
-        let physics_world = World::get_resource::<PhysicsWorld>(world_ptr).unwrap();
+        let physics_world = unsafe { World::get_resource::<PhysicsWorld>(world_ptr).unwrap() };
         assert_eq!(physics_world.broad_phase_pairs(), &[(e1, e2)]);
     }
 
@@ -99,7 +99,7 @@ fn assert_mat4_close(a: Mat4, b: Mat4, epsilon: f32) {
 
         let commands: &Commands = &app;
         let world_ptr = commands.world;
-        let physics_world = World::get_resource::<PhysicsWorld>(world_ptr).unwrap();
+        let physics_world = unsafe { World::get_resource::<PhysicsWorld>(world_ptr).unwrap() };
 
         let expected_pairs = vec![
             (entities[0].min(entities[1]), entities[0].max(entities[1])),
@@ -139,7 +139,7 @@ fn assert_mat4_close(a: Mat4, b: Mat4, epsilon: f32) {
 
         let commands: &Commands = &app;
         let world_ptr = commands.world;
-        let events = World::get_resource::<PhysicsEvents>(world_ptr).unwrap();
+        let events = unsafe { World::get_resource::<PhysicsEvents>(world_ptr).unwrap() };
         assert_eq!(events.broad_phase_pairs, vec![(e1.min(e2), e1.max(e2))]);
     }
 }
@@ -278,14 +278,17 @@ fn physics_plugin_inserts_resources() {
     let world_ptr = commands.world;
 
     let physics_world =
-        World::get_resource::<PhysicsWorld>(world_ptr).expect("PhysicsWorld missing");
+        unsafe { World::get_resource::<PhysicsWorld>(world_ptr).expect("PhysicsWorld missing") };
     assert_eq!(physics_world.gravity(), Vec3::new(0.0, -9.81, 0.0));
     assert_eq!(physics_world.body_count(), 0);
 
-    let _time = World::get_resource::<PhysicsTime>(world_ptr).expect("PhysicsTime missing");
-    let _events = World::get_resource::<PhysicsEvents>(world_ptr).expect("PhysicsEvents missing");
-    let _debug = World::get_resource::<PhysicsDebugSettings>(world_ptr)
-        .expect("PhysicsDebugSettings missing");
+    unsafe {
+        let _time = World::get_resource::<PhysicsTime>(world_ptr).expect("PhysicsTime missing");
+        let _events =
+            World::get_resource::<PhysicsEvents>(world_ptr).expect("PhysicsEvents missing");
+        let _debug = World::get_resource::<PhysicsDebugSettings>(world_ptr)
+            .expect("PhysicsDebugSettings missing");
+    }
 }
 
 #[test]
@@ -324,7 +327,9 @@ fn physics_plugin_collects_bodies_from_ecs() {
     {
         let commands: &Commands = &app;
         let world_ptr = commands.world;
-        let time = World::get_resource_mut::<PhysicsTime>(world_ptr).expect("PhysicsTime missing");
+        let time = unsafe {
+            World::get_resource_mut::<PhysicsTime>(world_ptr).expect("PhysicsTime missing")
+        };
         let dt = time.fixed_delta;
         time.accumulate(dt);
     }
@@ -335,7 +340,7 @@ fn physics_plugin_collects_bodies_from_ecs() {
     let world_ptr = commands.world;
 
     let physics_world =
-        World::get_resource::<PhysicsWorld>(world_ptr).expect("PhysicsWorld missing");
+        unsafe { World::get_resource::<PhysicsWorld>(world_ptr).expect("PhysicsWorld missing") };
     assert_eq!(physics_world.body_count(), 2);
 
     let dynamic_body = physics_world
@@ -378,7 +383,7 @@ fn physics_plugin_applies_gravity_and_forces() {
     app.add_component(entity, ForceAccumulator(Vec3::new(4.0, 0.0, 0.0)))
         .unwrap();
 
-    {
+    unsafe {
         let commands: &Commands = &app;
         let world_ptr = commands.world;
         let time = World::get_resource_mut::<PhysicsTime>(world_ptr).expect("PhysicsTime missing");
@@ -390,30 +395,32 @@ fn physics_plugin_applies_gravity_and_forces() {
     let commands: &Commands = &app;
     let world_ptr = commands.world;
 
-    let dt = World::get_resource::<PhysicsTime>(world_ptr)
-        .expect("PhysicsTime missing")
-        .fixed_delta;
+    unsafe {
+        let dt = World::get_resource::<PhysicsTime>(world_ptr)
+            .expect("PhysicsTime missing")
+            .fixed_delta;
 
-    let velocity = World::get_components::<Velocity>(world_ptr)
-        .into_iter()
-        .find(|(id, _)| *id == entity)
-        .map(|(_, vel)| vel.0)
-        .expect("Velocity component missing");
+        let velocity = World::get_components::<Velocity>(world_ptr)
+            .into_iter()
+            .find(|(id, _)| *id == entity)
+            .map(|(_, vel)| vel.0)
+            .expect("Velocity component missing");
 
-    let transform = World::get_components::<Transform>(world_ptr)
-        .into_iter()
-        .find(|(id, _)| *id == entity)
-        .map(|(_, t)| t)
-        .expect("Transform missing");
+        let transform = World::get_components::<Transform>(world_ptr)
+            .into_iter()
+            .find(|(id, _)| *id == entity)
+            .map(|(_, t)| t)
+            .expect("Transform missing");
 
-    let force_after_step = World::get_components::<ForceAccumulator>(world_ptr)
-        .into_iter()
-        .find(|(id, _)| *id == entity)
-        .map(|(_, force)| force.0)
-        .expect("ForceAccumulator missing");
+        let force_after_step = World::get_components::<ForceAccumulator>(world_ptr)
+            .into_iter()
+            .find(|(id, _)| *id == entity)
+            .map(|(_, force)| force.0)
+            .expect("ForceAccumulator missing");
 
-    assert!((velocity.y + 9.81 * dt).abs() < 1e-5);
-    assert!((velocity.x - 2.0 * dt).abs() < 1e-5);
-    assert!(force_after_step.length() < 1e-5);
-    assert!(transform.pos.y < 0.0);
+        assert!((velocity.y + 9.81 * dt).abs() < 1e-5);
+        assert!((velocity.x - 2.0 * dt).abs() < 1e-5);
+        assert!(force_after_step.length() < 1e-5);
+        assert!(transform.pos.y < 0.0);
+    }
 }
