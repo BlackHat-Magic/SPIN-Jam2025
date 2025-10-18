@@ -1,12 +1,8 @@
-use std::collections::HashMap;
-
-use anyhow::Result;
 use image::{ImageBuffer, Rgba};
 use wgpu::{Extent3d, TexelCopyBufferLayout, TexelCopyTextureInfo, Texture};
 
 use super::{Displayable, Gpu, Images};
 
-use crate::utils::gather_dir;
 use crate::*;
 
 #[derive(Clone)]
@@ -125,7 +121,15 @@ impl SpriteBuilder {
             .images
             .get(&self.image_path)
             .expect("Failed to load image");
-        let mut img = img.clone();
+        let img = img.clone();
+        let mut img = image::imageops::crop_imm(
+            &img,
+            self.x as u32,
+            self.y as u32,
+            self.w as u32,
+            self.h as u32,
+        )
+        .to_image();
 
         if let Some(pallete_swap) = &self.pallete_swap {
             pallete_swap.apply(&mut img);
@@ -149,15 +153,6 @@ impl SpriteBuilder {
                 | wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[],
         });
-
-        let img = image::imageops::crop_imm(
-            &img,
-            self.x as u32,
-            self.y as u32,
-            self.w as u32,
-            self.h as u32,
-        )
-        .to_image();
 
         gpu.queue.write_texture(
             TexelCopyTextureInfo {

@@ -4,14 +4,6 @@ struct FragmentInput {
     @location(2) uv       : vec2<f32>,
 };
 
-struct Material {
-    albedo    : vec4<f32>,
-    metallic  : f32,
-    roughness : f32,
-    ao        : f32,
-    padding   : f32,
-};
-
 struct Light {
     position : vec3<f32>,
     color    : vec3<f32>,
@@ -19,7 +11,15 @@ struct Light {
 
 @group(0) @binding(1) var<uniform> light : Light;
 @group(0) @binding(2) var<uniform> cameraPos : vec3<f32>;
-@group(0) @binding(3) var<uniform> material : Material;
+
+@group(0) @binding(3) var albedo_tex: texture_2d<f32>;
+@group(0) @binding(4) var albedo_sampler: sampler;
+@group(0) @binding(5) var metallic_tex: texture_2d<f32>;
+@group(0) @binding(6) var metallic_sampler: sampler;
+@group(0) @binding(7) var roughness_tex: texture_2d<f32>;
+@group(0) @binding(8) var roughness_sampler: sampler;
+@group(0) @binding(9) var ao_tex: texture_2d<f32>;
+@group(0) @binding(10) var ao_sampler: sampler;
 
 fn fresnelSchlick(cosTheta: f32, F0: vec3<f32>) -> vec3<f32> {
     return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
@@ -60,10 +60,11 @@ fn main(input: FragmentInput) -> @location(0) vec4<f32> {
     let attenuation = 1.0 / (distance * distance);
     let radiance    = light.color * attenuation;
 
-    let albedo = material.albedo.rgb;
-    let metallic  = material.metallic;
-    let roughness = material.roughness;
-    let ao        = material.ao;
+    // Sample textures
+    let albedo = textureSample(albedo_tex, albedo_sampler, input.uv).rgb;
+    let metallic = textureSample(metallic_tex, metallic_sampler, input.uv).r;
+    let roughness = textureSample(roughness_tex, roughness_sampler, input.uv).r;
+    let ao = textureSample(ao_tex, ao_sampler, input.uv).r;
 
     let F0 = mix(vec3<f32>(0.04, 0.04, 0.04), albedo, metallic);
 

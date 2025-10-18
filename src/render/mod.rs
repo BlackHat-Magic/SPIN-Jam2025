@@ -4,7 +4,6 @@ pub mod sprite;
 use crate::*;
 
 use model::{Model, ModelHandle};
-use sprite::*;
 
 use crate::physics::{Camera, Transform};
 
@@ -13,8 +12,11 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use winit::window::Window;
-
+use anyhow::Result;
+use image::{ImageBuffer, Rgba};
+use wgpu::{Texture, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, Extent3d};
 use wgpu::util::DeviceExt;
+
 
 #[derive(Resource)]
 pub struct Images {
@@ -41,12 +43,109 @@ struct MaterialData {
     padding: f32,
 }
 
-#[derive(Component)]
+
+#[derive(Component, Clone)]
+pub struct MaterialHandle {
+    pub name: String,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
 pub struct Material {
-    pub albedo_color: [f32; 4],
-    pub metallic: f32,
-    pub roughness: f32,
-    pub ao: f32,
+    pub albedo: String,
+    pub metallic: String,
+    pub roughness: String,
+    pub ao: String,
+}
+
+#[derive(Resource)]
+pub struct Materials {
+    pub materials: HashMap<String, LoadedMaterial>,
+}
+
+pub struct LoadedMaterial {
+    pub albedo: Texture,
+    pub metallic: Texture,
+    pub roughness: Texture,
+    pub ao: Texture,
+    pub albedo_sampler: wgpu::Sampler,
+    pub metallic_sampler: wgpu::Sampler,
+    pub roughness_sampler: wgpu::Sampler,
+    pub ao_sampler: wgpu::Sampler,
+}
+
+pub fn image_to_texture(gpu: &crate::render::Gpu, img: &ImageBuffer<Rgba<u8>, Vec<u8>>) -> Texture {
+    let size = Extent3d {
+        width: img.width(),
+        height: img.height(),
+        depth_or_array_layers: 1,
+    };
+    let texture = gpu.device.create_texture(&TextureDescriptor {
+        label: Some("Material Texture"),
+        size,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: TextureDimension::D2,
+        format: TextureFormat::Rgba8UnormSrgb,
+        usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
+        view_formats: &[],
+    });
+    gpu.queue.write_texture(
+        wgpu::TexelCopyTextureInfo {
+            texture: &texture,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        &img.as_raw().as_slice(),
+        wgpu::TexelCopyBufferLayout {
+            offset: 0,
+            bytes_per_row: Some(4 * (size.width as u32)),
+            rows_per_image: Some(size.height as u32),
+        },
+        size,
+    );
+    texture
+}
+
+impl Materials {
+    pub fn load(gpu: &Gpu, images: &Images) -> Result<Self> {
+        let materials = crate::gather_dir("materials", |path| {
+            let json = std::fs::read_to_string(path).ok()?;
+            let mat: Material = serde_json::from_str(&json).ok()?;
+            let get_tex = |name: &str| {
+                if name.starts_with("#") {
+                    let color_code = &name[1..];
+
+                    if color_code.len() == 6 {
+                        let r = u8::from_str_radix(&color_code[0..2], 16).ok()?;
+                        let g = u8::from_str_radix(&color_code[2..4], 16).ok()?;
+                        let b = u8::from_str_radix(&color_code[4..6], 16).ok()?;
+
+                        return Some(image_to_texture(gpu, &ImageBuffer::from_fn(1, 1, |_, _| Rgba([r, g, b, 255]))));
+                    } else if color_code.len() == 2 {
+                        let r = u8::from_str_radix(&color_code[0..2], 16).ok()?;
+
+                        return Some(image_to_texture(gpu, &ImageBuffer::from_fn(1, 1, |_, _| Rgba([r, 0, 0, 255]))));
+                    }
+                }
+
+                let img = images.images.get(name)?;
+                Some(image_to_texture(gpu, img))
+            };
+            let sampler = gpu.device.create_sampler(&wgpu::SamplerDescriptor::default());
+            Some(LoadedMaterial {
+                albedo: get_tex(&mat.albedo)?,
+                metallic: get_tex(&mat.metallic)?,
+                roughness: get_tex(&mat.roughness)?,
+                ao: get_tex(&mat.ao)?,
+                albedo_sampler: sampler.clone(),
+                metallic_sampler: sampler.clone(),
+                roughness_sampler: sampler.clone(),
+                ao_sampler: sampler,
+            })
+        })?;
+        Ok(Self { materials })
+    }
 }
 
 pub struct RenderPlugin;
@@ -54,13 +153,15 @@ pub struct RenderPlugin;
 impl Plugin for RenderPlugin {
     fn build(&self, app: &mut App) {
         let gpu = app.get_resource_mut::<Gpu>().unwrap();
-        app.insert_resource(Images::load().expect("Failed to load images"));
-
+        let images = Images::load().expect("Failed to load images");
         let shaders = Shaders::load(gpu);
-        app.insert_resource(shaders);
-
         let models = Models::load(gpu);
+        let materials = Materials::load(gpu, &images).expect("Failed to load materials");
+
+        app.insert_resource(images);
+        app.insert_resource(shaders);
         app.insert_resource(models);
+        app.insert_resource(materials);
 
         app.add_system(render_system, SystemStage::Render);
         app.add_system(update_camera_aspect_ratio, SystemStage::PreUpdate);
@@ -180,53 +281,110 @@ impl Shaders {
         let vs_module = shaders.get("vs_main").expect("vs_main shader not found");
         let fs_module = shaders.get("fg_main").expect("fg_main shader not found");
 
-        let bind_group_layout =
-            gpu.device
-                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    label: Some("Model Bind Group Layout"),
-                    entries: &[
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 0,
-                            visibility: wgpu::ShaderStages::VERTEX,
-                            ty: wgpu::BindingType::Buffer {
-                                ty: wgpu::BufferBindingType::Uniform,
-                                has_dynamic_offset: false,
-                                min_binding_size: None,
-                            },
-                            count: None,
-                        },
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 1,
-                            visibility: wgpu::ShaderStages::FRAGMENT,
-                            ty: wgpu::BindingType::Buffer {
-                                ty: wgpu::BufferBindingType::Uniform,
-                                has_dynamic_offset: false,
-                                min_binding_size: None,
-                            },
-                            count: None,
-                        },
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 2,
-                            visibility: wgpu::ShaderStages::FRAGMENT,
-                            ty: wgpu::BindingType::Buffer {
-                                ty: wgpu::BufferBindingType::Uniform,
-                                has_dynamic_offset: false,
-                                min_binding_size: None,
-                            },
-                            count: None,
-                        },
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 3,
-                            visibility: wgpu::ShaderStages::FRAGMENT,
-                            ty: wgpu::BindingType::Buffer {
-                                ty: wgpu::BufferBindingType::Uniform,
-                                has_dynamic_offset: false,
-                                min_binding_size: None,
-                            },
-                            count: None,
-                        },
-                    ],
-                });
+        let bind_group_layout = gpu.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("Model Bind Group Layout"),
+            entries: &[
+                // Uniforms
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                // Albedo
+                wgpu::BindGroupLayoutEntry {
+                    binding: 3,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 4,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+                // Metallic
+                wgpu::BindGroupLayoutEntry {
+                    binding: 5,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 6,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+                // Roughness
+                wgpu::BindGroupLayoutEntry {
+                    binding: 7,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 8,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+                // AO
+                wgpu::BindGroupLayoutEntry {
+                    binding: 9,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 10,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+            ],
+        });
 
         let pipeline_layout = gpu
             .device
@@ -540,11 +698,12 @@ system!(
         gpu: res &mut Gpu,
         shaders: res &Shaders,
         models: res &Models,
+        materials: res &Materials,
 
-        to_display: query (&Transform, &ModelHandle, &Material),
+        to_display: query (&Transform, &ModelHandle, &MaterialHandle),
         camera: query (&Transform, &Camera),
     ) {
-        let (Some(gpu), Some(shaders), Some(models)) = (gpu, shaders, models) else {
+        let (Some(gpu), Some(shaders), Some(models), Some(materials)) = (gpu, shaders, models, materials) else {
             return;
         };
 
@@ -608,23 +767,26 @@ system!(
                 let mut renderpass = encoder.begin_render_pass(&renderpass_desc);
 
                 for model in to_display {
-                    let (transform, model_handle, material) = model;
+                    let (transform, model_handle, material_handle) = model;
 
                     let Some(model) = models.models.get(&model_handle.path) else {
                         eprintln!("Model not found: {}", model_handle.path);
                         continue;
                     };
 
+                    let Some(mat) = materials.materials.get(&material_handle.name) else {
+                        eprintln!("Material not found: {}", material_handle.name);
+                        continue;
+                    };
+
                     let model_matrix = transform.to_matrix();
                     let model_matrix = model_matrix.to_cols_array_2d();
-
 
                     let uniforms_data = [
                         model_matrix,
                         view_matrix,
                         projection_matrix,
                     ];
-
                     let uniforms_buffer = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                         label: Some("Uniforms Buffer"),
                         contents: bytemuck::cast_slice(&uniforms_data),
@@ -632,34 +794,19 @@ system!(
                     });
 
                     let light_data: [f32; 8] = [
-                        2.0, 5.0, -2.0, 0.0, // position (vec3 + padding)
-                        1.0, 1.0, 1.0, 0.0, // color (vec3 + padding)
+                        2.0, 5.0, -2.0, 0.0,
+                        1.0, 1.0, 1.0, 0.0,
                     ];
-
                     let light_buffer = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                         label: Some("Light Buffer"),
                         contents: bytemuck::cast_slice(&light_data),
                         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
                     });
 
-                    let camera_data: [f32; 4] = [0.0, 0.0, 5.0, 0.0]; // position + padding
+                    let camera_data: [f32; 4] = [0.0, 0.0, 5.0, 0.0];
                     let camera_buffer = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                         label: Some("Camera Buffer"),
                         contents: bytemuck::cast_slice(&camera_data),
-                        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-                    });
-
-                    let material_data = MaterialData {
-                        albedo: material.albedo_color,
-                        metallic: material.metallic,
-                        roughness: material.roughness,
-                        ao: material.ao,
-                        padding: 0.0,
-                    };
-
-                    let material_buffer = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some("Material Buffer"),
-                        contents: bytemuck::cast_slice(&[material_data]),
                         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
                     });
 
@@ -681,7 +828,35 @@ system!(
                             },
                             wgpu::BindGroupEntry {
                                 binding: 3,
-                                resource: material_buffer.as_entire_binding(),
+                                resource: wgpu::BindingResource::TextureView(&mat.albedo.create_view(&Default::default())),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 4,
+                                resource: wgpu::BindingResource::Sampler(&mat.albedo_sampler),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 5,
+                                resource: wgpu::BindingResource::TextureView(&mat.metallic.create_view(&Default::default())),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 6,
+                                resource: wgpu::BindingResource::Sampler(&mat.metallic_sampler),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 7,
+                                resource: wgpu::BindingResource::TextureView(&mat.roughness.create_view(&Default::default())),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 8,
+                                resource: wgpu::BindingResource::Sampler(&mat.roughness_sampler),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 9,
+                                resource: wgpu::BindingResource::TextureView(&mat.ao.create_view(&Default::default())),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 10,
+                                resource: wgpu::BindingResource::Sampler(&mat.ao_sampler),
                             },
                         ],
                     });

@@ -134,12 +134,7 @@ system! {
         let entity = commands.spawn_entity();
         commands.add_component(entity, Transform::default());
         commands.add_component(entity, ModelHandle { path: "sphere".into() });
-        commands.add_component(entity, Material {
-            albedo_color: [1.0, 0.0, 0.0, 1.0], // red
-            metallic: 0.0,
-            roughness: 0.5,
-            ao: 1.0,
-        });
+        commands.add_component(entity, MaterialHandle { name: "test_mat".into() });
 
         let camera_entity = commands.spawn_entity();
         commands.add_component(camera_entity, Transform {
