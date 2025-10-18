@@ -48,6 +48,7 @@ impl Plugin for RenderPlugin {
         app.insert_resource(models);
 
         app.add_system(render_system, SystemStage::Render);
+        app.add_system(update_camera_aspect_ratio, SystemStage::PreUpdate);
     }
 }
 
@@ -456,7 +457,6 @@ impl Gpu {
 
     pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         self.size = new_size;
-
         self.configure_surface();
     }
 
@@ -502,6 +502,21 @@ impl Gpu {
             Err(pos) => pos,
         };
         self.quads.insert(pos, quad);
+    }
+}
+
+system! {
+    fn update_camera_aspect_ratio(
+        gpu: res &Gpu,
+        cameras: query (&mut Camera),
+    ) {
+        let Some(gpu) = gpu else {
+            return;
+        };
+
+        for camera in cameras {
+            camera.aspect = gpu.size.width as f32 / gpu.size.height as f32;
+        }
     }
 }
 
@@ -667,7 +682,7 @@ system!(
 
             // Render quads in the same render pass
             {
-                let mut renderpass_desc = wgpu::RenderPassDescriptor {
+                let renderpass_desc = wgpu::RenderPassDescriptor {
                     label: None,
                     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                         view: &texture_view,
@@ -719,31 +734,21 @@ system!(
                         ],
                     });
 
+                    let w = gpu.size.width as f32;
+                    let h = gpu.size.height as f32;
+                    let x = quad.rect.0 / w * 2.0 - 1.0;
+                    let y = 1.0 - quad.rect.1 / h * 2.0;
+                    let x2 = (quad.rect.0 + quad.rect.2) / w * 2.0 - 1.0;
+                    let y2 = 1.0 - (quad.rect.1 + quad.rect.3) / h * 2.0;
                     let buffer = gpu
                         .device
                         .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                             label: Some("Quad Vertex Buffer"),
                             contents: bytemuck::cast_slice(&[
-                                quad.rect.0,
-                                quad.rect.1,
-                                quad.depth,
-                                0.0,
-                                0.0,
-                                quad.rect.0 + quad.rect.2,
-                                quad.rect.1,
-                                quad.depth,
-                                1.0,
-                                0.0,
-                                quad.rect.0 + quad.rect.2,
-                                quad.rect.1 + quad.rect.3,
-                                quad.depth,
-                                1.0,
-                                1.0,
-                                quad.rect.0,
-                                quad.rect.1 + quad.rect.3,
-                                quad.depth,
-                                0.0,
-                                1.0,
+                                x, y, quad.depth, 0.0, 0.0,
+                                x2, y, quad.depth, 1.0, 0.0,
+                                x2, y2, quad.depth, 1.0, 1.0,
+                                x, y2, quad.depth, 0.0, 1.0,
                             ]),
                             usage: wgpu::BufferUsages::VERTEX,
                         });
