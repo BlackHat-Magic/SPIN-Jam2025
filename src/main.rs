@@ -23,6 +23,11 @@ use utils::input::Input;
 pub use utils::time::*;
 pub use utils::*;
 
+#[derive(NetSend, NetRecv, Serialize, Deserialize)]
+pub struct TestMessage {
+    pub content: String,
+}
+
 fn main() {
     let mut app = App::new();
 

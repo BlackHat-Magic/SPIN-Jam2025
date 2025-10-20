@@ -1,5 +1,4 @@
 use proc_macro::TokenStream;
-use proc_macro2::{Delimiter, Ident, TokenStream as TokenStream2, TokenTree};
 use quote::quote;
 use syn::{DeriveInput, parse_macro_input};
 
@@ -12,11 +11,11 @@ pub fn derive_net_send(input: TokenStream) -> TokenStream {
     quote! {
         impl NetSend for #name {
             fn get_type_id(&self) -> usize {
-                get_component_id::<Self>()
+                get_send_id::<Self>()
             }
 
-            fn into_bytes(&self) -> Vec<u8> {
-                bincode::serialize(self).unwrap()
+            fn get_bytes(&self) -> Vec<u8> {
+                bincode::serde::encode_to_vec::<&#name, bincode::config::Configuration>(self, bincode::config::Configuration::default()).unwrap()
             }
         }
 
@@ -39,11 +38,11 @@ pub fn derive_net_recv(input: TokenStream) -> TokenStream {
     quote! {
         impl NetRecv for #name {
             fn get_type_id(&self) -> usize {
-                get_component_id::<Self>()
+                get_recv_id::<Self>()
             }
 
             fn from_bytes(bytes: &[u8]) -> Self {
-                bincode::deserialize(bytes).unwrap()
+                bincode::serde::decode_from_slice::<#name, bincode::config::Configuration>(bytes, bincode::config::Configuration::default()).unwrap().0
             }
         }
 
@@ -51,6 +50,7 @@ pub fn derive_net_recv(input: TokenStream) -> TokenStream {
             NetRecvRegistration {
                 type_id: ConstTypeId::of::<#name>(),
                 name: #type_name,
+                from_bytes: |bytes: &[u8]| -> Box<dyn std::any::Any> { Box::new(#name::from_bytes(bytes)) },
             }
         }
     }

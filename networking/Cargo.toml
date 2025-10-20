@@ -11,4 +11,7 @@ typeid = "1.0.3"
 lazy_static = "1.5.0"
 rayon = "1.11.0"
 serde = { version = "1.0.219", features = ["alloc", "derive", "rc", "std"] }
-quinn = "0.11.9"
+bincode = { version = "2.0.1", features = ["serde"] }
+tokio = { version = "1.48.0", features = ["full"] }
+chamomile = "0.11.2"
+anyhow = "1.0.99"
