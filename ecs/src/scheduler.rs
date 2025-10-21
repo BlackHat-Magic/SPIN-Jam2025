@@ -57,6 +57,8 @@ impl Scheduler {
                 let world = WorldWrapper(world);
 
                 group.par_iter().for_each(|system| {
+                    #[allow(clippy::redundant_locals)] // it's not actually redundant here because
+                    // of safety reasons
                     let world = world;
                     let world = world.0;
 
@@ -69,7 +71,7 @@ impl Scheduler {
     }
 
     pub(crate) fn add_system(&mut self, system: *mut dyn System, stage: SystemStage) {
-        let entry = self.systems.entry(stage).or_insert_with(Vec::new);
+        let entry = self.systems.entry(stage).or_default();
         if unsafe { system.as_ref() }.unwrap().runs_alone() || entry.is_empty() {
             entry.push(vec![system]);
             return;
@@ -83,14 +85,14 @@ impl Scheduler {
             for &existing_system in group.iter() {
                 let existing_component_access = unsafe { (*existing_system).component_access() };
                 let new_component_access = unsafe { (*system).component_access() };
-                if existing_component_access.overlaps(&new_component_access) {
+                if existing_component_access.overlaps(new_component_access) {
                     overlap = true;
                     break;
                 }
 
                 let existing_resource_access = unsafe { (*existing_system).resource_access() };
                 let new_resource_access = unsafe { (*system).resource_access() };
-                if existing_resource_access.overlaps(&new_resource_access) {
+                if existing_resource_access.overlaps(new_resource_access) {
                     overlap = true;
                     break;
                 }

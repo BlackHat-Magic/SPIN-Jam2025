@@ -21,6 +21,9 @@ impl DerefMut for App {
 }
 
 impl App {
+    // I prefer App:new over App::default for clarity here as it is only supposed to ever
+    // initialize to one thing, so it doesn't make snese to me to call it "default"
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         let world = Box::into_raw(Box::new(World::new()));
         let scheduler = Box::into_raw(Box::new(Scheduler::new(world)));
@@ -113,7 +116,7 @@ impl Commands {
     }
 
     pub fn insert_resource<T: Resource>(&mut self, resource: T) -> Option<()> {
-        let id = get_resource_id::<T>() as usize;
+        let id = get_resource_id::<T>();
         unsafe {
             let world = self.world.as_mut().unwrap();
             if world.resources[id].is_none() {
@@ -181,6 +184,13 @@ impl Commands {
             world.should_exit
         }
     }
+
+    pub fn exit(&mut self) {
+        unsafe {
+            let world = self.world.as_mut().unwrap();
+            world.should_exit = true;
+        }
+    }
 }
 
 pub struct World {
@@ -219,8 +229,11 @@ impl World {
         }
     }
 
+    /// # Safety
+    ///
+    /// `world` must be non-null and valid
     pub unsafe fn get_resource<T: Resource>(world: *mut World) -> Option<&'static T> {
-        let id = get_resource_id::<T>() as usize;
+        let id = get_resource_id::<T>();
         unsafe {
             Some(
                 world
@@ -235,8 +248,11 @@ impl World {
         }
     }
 
+    /// # Safety
+    ///
+    /// `world` must be non-null and valid
     pub unsafe fn get_resource_mut<T: Resource>(world: *mut World) -> Option<&'static mut T> {
-        let id = get_resource_id::<T>() as usize;
+        let id = get_resource_id::<T>();
         unsafe {
             Some(
                 world
@@ -251,8 +267,11 @@ impl World {
         }
     }
 
+    /// # Safety
+    ///
+    /// `world` must be non-null and valid
     pub unsafe fn get_components<T: Component>(world: *mut World) -> Vec<(u32, &'static T)> {
-        let id = get_component_id::<T>() as usize;
+        let id = get_component_id::<T>();
         let mut components = Vec::new();
 
         unsafe {
@@ -272,10 +291,13 @@ impl World {
         components
     }
 
+    /// # Safety
+    ///
+    /// `world` must be non-null and valid
     pub unsafe fn get_components_mut<T: Component>(
         world: *mut World,
     ) -> Vec<(u32, &'static mut T)> {
-        let id = get_component_id::<T>() as usize;
+        let id = get_component_id::<T>();
         let mut components = Vec::new();
 
         unsafe {

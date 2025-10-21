@@ -33,10 +33,12 @@ async fn main() {
 
     loop {
         app.run();
-        // TODO: exiting the server cleanly
+        if app.should_exit() {
+            break;
+        }
     }
 
-    //app.de_init();
+    app.de_init();
 
-    //std::process::exit(0);
+    std::process::exit(0);
 }

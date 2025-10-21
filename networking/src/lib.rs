@@ -1,3 +1,6 @@
+// temporary while working on the crate
+#![allow(unused)]
+
 use ecs::*;
 
 mod registry;
@@ -180,17 +183,20 @@ pub enum Target {
     This,
 }
 
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum NetworkingEvent {
     RecvData { from: Target, data: Vec<u8> },
     Disconnected { target: Target },
     Connected { target: Target },
 }
 
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum Reliability {
     Reliable,
     Unreliable,
 }
 
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum NetworkingRequest {
     Exit,
     SendData {

@@ -40,6 +40,7 @@ pub trait Plugin {
     fn build(&self, app: &mut App);
 }
 
+#[derive(Default)]
 pub struct PluginGroup {
     plugins: Vec<Box<dyn Plugin>>,
 }
@@ -53,10 +54,6 @@ impl Plugin for PluginGroup {
 }
 
 impl PluginGroup {
-    pub fn new() -> Self {
-        Self { plugins: vec![] }
-    }
-
     pub fn add(&mut self, plugin: Box<dyn Plugin>) {
         self.plugins.push(plugin);
     }
@@ -66,7 +63,7 @@ impl PluginGroup {
 macro_rules! plugin_group {
     ($($plugin:expr),* $(,)?) => {
         {
-            let mut group = PluginGroup::new();
+            let mut group = PluginGroup::default();
             $(
                 group.add(Box::new($plugin));
             )*
@@ -188,26 +185,26 @@ impl Entity {
     }
 
     pub fn get_component<T: Component>(&self) -> Option<&T> {
-        let id = get_component_id::<T>() as usize;
+        let id = get_component_id::<T>();
         self.components[id]
             .as_ref()
             .and_then(|c| c.as_any().downcast_ref::<T>())
     }
 
     pub fn get_component_mut<T: Component>(&mut self) -> Option<&mut T> {
-        let id = get_component_id::<T>() as usize;
+        let id = get_component_id::<T>();
         self.components[id]
             .as_mut()
             .and_then(|c| c.as_any_mut().downcast_mut::<T>())
     }
 
     pub fn remove_component<T: Component>(&mut self) -> Option<Box<dyn Component>> {
-        let id = get_component_id::<T>() as usize;
+        let id = get_component_id::<T>();
         self.components[id].take()
     }
 
     pub fn has_component<T: Component>(&self) -> bool {
-        let id = get_component_id::<T>() as usize;
+        let id = get_component_id::<T>();
         self.components[id].is_some()
     }
 }

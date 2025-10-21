@@ -71,5 +71,7 @@ pub trait System: Send + Sync + 'static {
     fn set_last_run(&mut self, tick: Tick);
     fn runs_alone(&self) -> bool;
 
+    /// # Safety
+    /// just don't call this outside of the `ecs` crate
     unsafe fn run_unsafe(&mut self, world: *mut World);
 }
