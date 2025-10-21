@@ -8,13 +8,27 @@ use crate::*;
 pub mod input;
 pub mod time;
 
-pub struct UtilPlugin;
+pub struct UtilPlugin {
+    is_server: bool,
+}
 
+impl UtilPlugin {
+    pub fn client() -> Self {
+        Self { is_server: false }
+    }
+
+    pub fn server() -> Self {
+        Self { is_server: true }
+    }
+}
 impl Plugin for UtilPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(Input::new());
 
-        app.add_system(input::input_system, SystemStage::PreUpdate);
+        if !self.is_server {
+            app.add_system(input::input_system, SystemStage::PreUpdate);
+        }
+        app.add_system(time::update_time, SystemStage::PreUpdate);
         app.add_system(time::init_time, SystemStage::Init);
     }
 }

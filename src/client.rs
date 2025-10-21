@@ -18,7 +18,7 @@ pub mod utils;
 pub use physics::*;
 pub use render::model::ModelHandle;
 use render::sprite::*;
-use render::*;
+pub use render::*;
 use utils::input::Input;
 pub use utils::time::*;
 pub use utils::*;
@@ -48,16 +48,15 @@ async fn main() {
             let gpu = pollster::block_on(Gpu::new(Arc::new(window)));
             self.app.insert_resource(gpu);
 
-            let default_plugins = plugin_group!(
-                utils::UtilPlugin,
+            let plugins = plugin_group!(
                 physics::PhysicsPlugin,
                 render::RenderPlugin,
+                utils::UtilPlugin::client(),
                 networking::NetworkingPlugin::client(),
             );
 
-            self.app.add_plugin(default_plugins);
+            self.app.add_plugin(plugins);
 
-            self.app.add_system(update_time, SystemStage::PreUpdate);
             self.app.add_system(display_sprite, SystemStage::Update);
             self.app.add_system(control_player, SystemStage::Update);
             self.app.add_system(init_scene, SystemStage::Init);
