@@ -13,5 +13,5 @@ rayon = "1.11.0"
 serde = { version = "1.0.219", features = ["alloc", "derive", "rc", "std"] }
 bincode = { version = "2.0.1", features = ["serde"] }
 tokio = { version = "1.48.0", features = ["full"] }
-chamomile = "0.11.2"
+quinn = { version = "0.11.9", features = [] }
 anyhow = "1.0.99"

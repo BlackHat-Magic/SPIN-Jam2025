@@ -4,6 +4,7 @@ mod registry;
 
 pub use registry::*;
 
+use anyhow::Result;
 use std::any::Any;
 use std::collections::VecDeque;
 use std::sync::Mutex;
@@ -13,28 +14,35 @@ pub use net_derive::*;
 pub use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use tokio::sync::mpsc::*;
 
-pub trait NetSend: Serialize {
+pub trait NetSend: Any + Sized + DeserializeOwned {
     fn get_type_id(&self) -> usize;
     fn get_bytes(&self) -> Vec<u8>;
+    fn from_bytes(bytes: &[u8]) -> Result<Self>;
 }
 
-pub trait NetRecv: Any + Sized + DeserializeOwned {
-    fn get_type_id(&self) -> usize;
-    fn from_bytes(bytes: &[u8]) -> Self;
+pub struct NetworkingPlugin {
+    is_server: bool,
 }
 
-pub struct NetworkingPlugin;
+impl NetworkingPlugin {
+    pub fn client() -> Self {
+        Self { is_server: false }
+    }
+
+    pub fn server() -> Self {
+        Self { is_server: true }
+    }
+}
 
 impl Plugin for NetworkingPlugin {
     fn build(&self, app: &mut App) {
-        let (tx_event, rx_event) = channel(32);
-        let (tx_request, rx_request) = channel(32);
+        let (tx_event, rx_event) = channel(256);
+        let (tx_request, rx_request) = channel(256);
 
         tokio::spawn(handle_networking(tx_event, rx_request));
 
         app.insert_resource(Networking::new(tx_request, rx_event));
         app.add_system(gather_events, SystemStage::PreUpdate);
-        app.add_system(serialize_recv, SystemStage::PreUpdate);
     }
 }
 
@@ -47,34 +55,25 @@ system! {
         };
 
         networking.gather_recv();
-    }
-}
-
-system! {
-    fn serialize_recv(
-        networking: res &mut Networking,
-    ) {
-        let Some(networking) = networking else {
-            return;
-        };
-
         networking.serialize_recv();
     }
 }
+
+type RecvChannel = Mutex<VecDeque<(Target, Box<dyn Any>)>>;
 
 #[derive(Resource)]
 pub struct Networking {
     tx_request: Sender<NetworkingRequest>,
     rx_event: Receiver<NetworkingEvent>,
 
-    recv_buffer: Vec<Mutex<VecDeque<Box<dyn Any>>>>,
+    recv_buffer: Vec<RecvChannel>,
     events: Vec<NetworkingEvent>,
 }
 
 impl Networking {
     fn new(tx_request: Sender<NetworkingRequest>, rx_event: Receiver<NetworkingEvent>) -> Self {
         let mut recv_buffer = Vec::new();
-        let recv_count = registry::RECV_IDS.len();
+        let recv_count = registry::NET_IDS.len();
         for _ in 0..recv_count {
             recv_buffer.push(Mutex::new(VecDeque::new()));
         }
@@ -91,17 +90,6 @@ impl Networking {
         let mut events = Vec::new();
 
         while let Ok(event) = self.rx_event.try_recv() {
-            match &event {
-                NetworkingEvent::RecvData { from: _, data } => {
-                    debug_assert!(data.len() > 4);
-                    let type_id = u32::from_le_bytes([data[0], data[1], data[2], data[3]]) as usize;
-
-                    debug_assert!(type_id < self.recv_buffer.len());
-                    let data = &data[4..];
-                }
-                _ => {}
-            }
-
             events.push(event);
         }
 
@@ -109,7 +97,7 @@ impl Networking {
     }
 
     fn split_off_events(&mut self, cond: fn(&NetworkingEvent) -> bool) -> Vec<NetworkingEvent> {
-        let (split_off, events) = self.events.drain(..).partition(|e| cond(e));
+        let (split_off, events) = self.events.drain(..).partition(cond);
 
         self.events = events;
         split_off
@@ -119,36 +107,97 @@ impl Networking {
         let split_events = self.split_off_events(|e| matches!(e, NetworkingEvent::RecvData { .. }));
 
         for event in split_events {
-            match event {
-                NetworkingEvent::RecvData { from: _, data } => {
-                    debug_assert!(data.len() > 4);
-                    let type_id = u32::from_le_bytes([data[0], data[1], data[2], data[3]]) as usize;
+            let NetworkingEvent::RecvData { from, data } = &event else {
+                panic!("Event type mismatch in serialize_recv");
+            };
 
-                    debug_assert!(type_id < self.recv_buffer.len());
-                    let data = &data[4..];
+            debug_assert!(data.len() > 4);
+            let type_id = u32::from_le_bytes([data[0], data[1], data[2], data[3]]) as usize;
 
-                    let obj = registry::FROM_BYTES[type_id](data);
-                    let mut buffer = self.recv_buffer[type_id].lock().unwrap();
-                    buffer.push_back(obj);
-                }
-                _ => panic!("split off split off wrong????"),
-            }
+            debug_assert!(type_id < self.recv_buffer.len());
+            let data = &data[4..];
+
+            let Ok(obj) = registry::FROM_BYTES[type_id](data) else {
+                println!(
+                    "Failed to deserialize network object of type id: {}",
+                    type_id,
+                );
+                continue;
+            };
+            let mut buffer = self.recv_buffer[type_id].lock().unwrap();
+            buffer.push_back((*from, obj));
         }
+    }
+
+    pub fn next<T: NetSend>(&self) -> Option<(Target, T)> {
+        let type_id = registry::get_net_id::<T>();
+        debug_assert!(type_id < self.recv_buffer.len());
+
+        let mut buffer = self.recv_buffer[type_id].lock().unwrap();
+        let (target, obj) = buffer.pop_front()?;
+        let obj = *obj.downcast::<T>().unwrap();
+
+        Some((target, obj))
+    }
+
+    pub fn collect<T: NetSend>(&self) -> Vec<(Target, T)> {
+        let type_id = registry::get_net_id::<T>();
+        debug_assert!(type_id < self.recv_buffer.len());
+
+        let mut buffer = self.recv_buffer[type_id].lock().unwrap();
+        let mut results = Vec::new();
+
+        while let Some((target, obj)) = buffer.pop_front() {
+            let obj = *obj.downcast::<T>().unwrap();
+            results.push((target, obj));
+        }
+
+        results
+    }
+
+    pub fn send<T: NetSend>(&self, reliability: Reliability, target: Target, data: T) {
+        debug_assert!(target != Target::This, "Cannot send data to 'This' target");
+
+        let mut bytes = Vec::new();
+        let type_id = data.get_type_id() as u32;
+        bytes.extend_from_slice(&type_id.to_le_bytes());
+        bytes.extend_from_slice(&data.get_bytes());
+
+        let request = NetworkingRequest::SendData {
+            reliability,
+            target,
+            data: bytes,
+        };
+
+        let _ = self.tx_request.try_send(request);
     }
 }
 
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum Target {
     All,
     Single(u32),
+    This,
 }
 
 pub enum NetworkingEvent {
     RecvData { from: Target, data: Vec<u8> },
+    Disconnected { target: Target },
+    Connected { target: Target },
+}
+
+pub enum Reliability {
+    Reliable,
+    Unreliable,
 }
 
 pub enum NetworkingRequest {
     Exit,
-    SendData { target: Target, data: Vec<u8> },
+    SendData {
+        reliability: Reliability,
+        target: Target,
+        data: Vec<u8>,
+    },
 }
 
 async fn handle_networking(
@@ -164,7 +213,7 @@ async fn handle_networking(
 
                 match request {
                     NetworkingRequest::Exit => break,
-                    NetworkingRequest::SendData { target, data } => {
+                    NetworkingRequest::SendData { reliability, target, data } => {
                         // Handle sending data over the network
                     }
                 }

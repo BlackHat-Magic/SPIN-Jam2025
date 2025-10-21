@@ -23,12 +23,13 @@ use utils::input::Input;
 pub use utils::time::*;
 pub use utils::*;
 
-#[derive(NetSend, NetRecv, Serialize, Deserialize)]
+#[derive(NetSend, Serialize, Deserialize)]
 pub struct TestMessage {
     pub content: String,
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let mut app = App::new();
 
     struct WinitApp {
@@ -51,7 +52,7 @@ fn main() {
                 utils::UtilPlugin,
                 physics::PhysicsPlugin,
                 render::RenderPlugin,
-                networking::NetworkingPlugin,
+                networking::NetworkingPlugin::client(),
             );
 
             self.app.add_plugin(default_plugins);
