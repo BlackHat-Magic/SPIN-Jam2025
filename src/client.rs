@@ -39,7 +39,7 @@ async fn main() {
     impl ApplicationHandler for WinitApp {
         fn resumed(&mut self, event_loop: &ActiveEventLoop) {
             let window_attributes = Window::default_attributes()
-                .with_title("Klaus of Death")
+                .with_title("Game")
                 .with_visible(true)
                 .with_inner_size(winit::dpi::LogicalSize::new(800, 600))
                 .with_position(winit::dpi::LogicalPosition::new(100, 100));
