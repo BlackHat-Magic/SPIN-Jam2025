@@ -1,6 +1,6 @@
-use klaus_of_death::*;
+use rust_game_engine::*;
 
-#[derive(klaus_of_death::Resource, Default)]
+#[derive(Resource, Default)]
 struct StageLog(Vec<&'static str>);
 
 system! {

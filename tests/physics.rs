@@ -1,9 +1,9 @@
-use klaus_of_death::physics::{
+use rust_game_engine::physics::{
     AngularVelocity, BodyInit, Camera, Collider, ForceAccumulator, PhysicsDebugSettings,
     PhysicsEvents, PhysicsPlugin, PhysicsTestWorld, PhysicsTime, PhysicsWorld, RigidBody,
     Transform, Velocity,
 };
-use klaus_of_death::{App, Commands, World};
+use rust_game_engine::{App, Commands, World};
 
 use glam::{Mat4, Quat, Vec3};
 
