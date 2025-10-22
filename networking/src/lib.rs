@@ -1,6 +1,3 @@
-// temporary while working on the crate
-#![allow(unused)]
-
 use ecs::*;
 
 mod registry;
@@ -172,7 +169,9 @@ impl Networking {
             data: bytes,
         };
 
-        let _ = self.tx_request.try_send(request);
+        self.tx_request
+            .try_send(request)
+            .expect("Networking request buffer full");
     }
 }
 

@@ -141,6 +141,56 @@ system! {
         commands.add_component(entity, ModelHandle { path: "sphere".into() });
         commands.add_component(entity, MaterialHandle { name: "test_mat".into() });
 
+        let cube = commands.spawn_entity();
+        commands.add_component(cube, Transform {
+            pos: Vec3::new(2.0, 0.0, 0.0),
+            ..Default::default()
+        });
+        commands.add_component(cube, ModelHandle { path: "cube".into() });
+        commands.add_component(cube, MaterialHandle { name: "test_mat".into() });
+
+        use rand::prelude::*;
+        let mut rng = rand::rng();
+        for i in -3..=3 {
+            let light = commands.spawn_entity();
+            commands.add_component(light, Transform {
+                pos: Vec3::new(i as f32, 5.0, rng.random_range(-3.0..=3.0)),
+                ..Default::default()
+            });
+
+            let hue = rng.random_range((-std::f32::consts::PI)..=std::f32::consts::PI);
+            let saturation = 1.0;
+            let value = 1.0;
+
+            fn hsv_to_rgb(h: f32, s: f32, v: f32) -> Vec3 {
+                let c = v * s;
+                let x = c * (1.0 - ((h / (std::f32::consts::PI / 3.0)).rem_euclid(2.0) - 1.0).abs());
+                let m = v - c;
+
+                let (r1, g1, b1) = if h < std::f32::consts::PI / 3.0 {
+                    (c, x, 0.0)
+                } else if h < 2.0 * std::f32::consts::PI / 3.0 {
+                    (x, c, 0.0)
+                } else if h < std::f32::consts::PI {
+                    (0.0, c, x)
+                } else if h < 4.0 * std::f32::consts::PI / 3.0 {
+                    (0.0, x, c)
+                } else if h < 5.0 * std::f32::consts::PI / 3.0 {
+                    (x, 0.0, c)
+                } else {
+                    (c, 0.0, x)
+                };
+
+                Vec3::new(r1 + m, g1 + m, b1 + m)
+            }
+
+            let color = hsv_to_rgb(hue, saturation, value) * 3.0;
+
+            commands.add_component(light, Light {
+                brightness: color,
+            });
+        }
+
         let camera_entity = commands.spawn_entity();
         commands.add_component(camera_entity, Transform {
             pos: Vec3::new(0.0, 0.0, -5.0),
@@ -199,8 +249,15 @@ system! {
         }
 
 
-        let forward = player_transform.rot * -Vec3::Z;
-        let right = player_transform.rot * Vec3::X;
+        let mut forward = player_transform.rot * -Vec3::Z;
+        forward.y = 0.0;
+        forward = forward.normalize();
+
+        let mut right = player_transform.rot * Vec3::X;
+        right.y = 0.0;
+        right = right.normalize();
+
+        let up = Vec3::Y;
 
         let mut movement = Vec3::ZERO;
 
@@ -218,6 +275,14 @@ system! {
             movement += right;
         }
 
+        if input.is_key_pressed(winit::keyboard::KeyCode::KeyE) {
+            movement += up;
+        }
+        if input.is_key_pressed(winit::keyboard::KeyCode::KeyQ) {
+            movement -= up;
+        }
+
+        // uses `length_squared` to avoid a square root calculation
         if movement.length_squared() > 0.0 {
             movement = movement.normalize();
             movement = movement * 5.0 * time.delta_seconds;

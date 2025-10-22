@@ -307,7 +307,7 @@ impl Shaders {
                             binding: 1,
                             visibility: wgpu::ShaderStages::FRAGMENT,
                             ty: wgpu::BindingType::Buffer {
-                                ty: wgpu::BufferBindingType::Uniform,
+                                ty: wgpu::BufferBindingType::Storage { read_only: true },
                                 has_dynamic_offset: false,
                                 min_binding_size: None,
                             },
@@ -701,6 +701,28 @@ system! {
     }
 }
 
+use glam::Vec3;
+
+#[derive(Component)]
+pub struct Light {
+    pub brightness: Vec3,
+}
+
+impl Light {
+    fn get_buffer(&self, transform: &Transform) -> [f32; 8] {
+        [
+            transform.pos.x,
+            transform.pos.y,
+            transform.pos.z,
+            0.0,
+            self.brightness.x,
+            self.brightness.y,
+            self.brightness.z,
+            0.0,
+        ]
+    }
+}
+
 system!(
     fn render_system(
         gpu: res &mut Gpu,
@@ -709,6 +731,7 @@ system!(
         materials: res &Materials,
 
         to_display: query (&Transform, &ModelHandle, &MaterialHandle),
+        lights: query (&Transform, &Light),
         camera: query (&Transform, &Camera),
     ) {
         let (Some(gpu), Some(shaders), Some(models), Some(materials)) = (gpu, shaders, models, materials) else {
@@ -772,6 +795,12 @@ system!(
                 let view_matrix = transform.to_view_matrix();
                 let view_matrix = view_matrix.to_cols_array_2d();
 
+                let mut light_buffer = Vec::new();
+                for (transform, light) in lights {
+                    let light = light.get_buffer(transform);
+                    light_buffer.extend_from_slice(&light);
+                }
+
                 let mut renderpass = encoder.begin_render_pass(&renderpass_desc);
 
                 for model in to_display {
@@ -801,14 +830,10 @@ system!(
                         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
                     });
 
-                    let light_data: [f32; 8] = [
-                        2.0, 5.0, -2.0, 0.0,
-                        1.0, 1.0, 1.0, 0.0,
-                    ];
                     let light_buffer = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                         label: Some("Light Buffer"),
-                        contents: bytemuck::cast_slice(&light_data),
-                        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                        contents: bytemuck::cast_slice(&light_buffer),
+                        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
                     });
 
                     let camera_data: [f32; 4] = [0.0, 0.0, 5.0, 0.0];

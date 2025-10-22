@@ -6,10 +6,12 @@ struct FragmentInput {
 
 struct Light {
     position : vec3<f32>,
+    _pad1    : f32,
     color    : vec3<f32>,
+    _pad2    : f32,
 };
 
-@group(0) @binding(1) var<uniform> light : Light;
+@group(0) @binding(1) var<storage, read> lights : array<Light>;
 @group(0) @binding(2) var<uniform> cameraPos : vec3<f32>;
 
 @group(0) @binding(3) var albedo_tex: texture_2d<f32>;
@@ -53,6 +55,52 @@ fn geometrySmith(N: vec3<f32>, V: vec3<f32>, L: vec3<f32>, roughness: f32) -> f3
 fn main(input: FragmentInput) -> @location(0) vec4<f32> {
     let N = normalize(input.normal);
     let V = normalize(cameraPos - input.worldPos);
+
+    // Sample textures once
+    let albedo = textureSample(albedo_tex, albedo_sampler, input.uv).rgb;
+    let metallic = textureSample(metallic_tex, metallic_sampler, input.uv).r;
+    let roughness = textureSample(roughness_tex, roughness_sampler, input.uv).r;
+    let ao = textureSample(ao_tex, ao_sampler, input.uv).r;
+
+    let F0 = mix(vec3<f32>(0.04), albedo, metallic);
+
+    var Lo = vec3<f32>(0.0);
+    for (var i = 0u; i < arrayLength(&lights); i = i + 1u) {
+        let light = lights[i];
+        let L = normalize(light.position - input.worldPos);
+        let H = normalize(V + L);
+
+        let distance = length(light.position - input.worldPos);
+        let attenuation = 1.0 / (distance * distance);
+        let radiance = light.color * attenuation;
+
+        let NDF = distributionGGX(N, H, roughness);
+        let G   = geometrySmith(N, V, L, roughness);
+        let F   = fresnelSchlick(max(dot(H, V), 0.0), F0);
+
+        let numerator = NDF * G * F;
+        let denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.001;
+        let specular = numerator / denominator;
+
+        let kS = F;
+        var kD = vec3<f32>(1.0) - kS;
+        kD *= 1.0 - metallic;
+
+        let NdotL = max(dot(N, L), 0.0);
+        Lo += (kD * albedo / 3.14159265 + specular) * radiance * NdotL;
+    }
+
+    let ambient = vec3<f32>(0.01) * albedo * ao;
+    let color = ambient + Lo;
+
+    let gamma = 2.2;
+    let mapped = pow(color, vec3<f32>(1.0 / gamma));
+    return vec4<f32>(mapped, 1.0);
+}
+/*@fragment
+fn main(input: FragmentInput) -> @location(0) vec4<f32> {
+    let N = normalize(input.normal);
+    let V = normalize(cameraPos - input.worldPos);
     let L = normalize(light.position - input.worldPos);
     let H = normalize(V + L);
 
@@ -84,7 +132,7 @@ fn main(input: FragmentInput) -> @location(0) vec4<f32> {
 
     let Lo = (kD * albedo / 3.14159265 + specular) * radiance * NdotL;
 
-    let ambient = vec3<f32>(0.03, 0.03, 0.03) * albedo * ao;
+    let ambient = vec3<f32>(0.01, 0.01, 0.01) * albedo * ao;
 
     let color = ambient + Lo;
 
@@ -93,4 +141,4 @@ fn main(input: FragmentInput) -> @location(0) vec4<f32> {
     let mapped = pow(color, vec3<f32>(1.0 / gamma));
 
     return vec4<f32>(mapped, 1.0);
-}
+}*/
