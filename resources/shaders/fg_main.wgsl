@@ -85,7 +85,7 @@ fn main(input: FragmentInput) -> @location(0) vec4<f32> {
         var kD = vec3<f32>(1.0) - kS;
         kD *= 1.0 - metallic;
 
-        let NdotL = abs(max(dot(N, L), 0.0));
+        let NdotL = max(dot(N, L), 0.0);
         Lo += (kD * albedo / 3.14159265 + specular) * radiance * NdotL;
     }
 

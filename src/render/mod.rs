@@ -836,7 +836,7 @@ system!(
                         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
                     });
 
-                    let camera_data: [f32; 4] = [0.0, 0.0, 5.0, 0.0];
+                    let camera_data: [f32; 3] = transform.pos.to_array();
                     let camera_buffer = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                         label: Some("Camera Buffer"),
                         contents: bytemuck::cast_slice(&camera_data),
