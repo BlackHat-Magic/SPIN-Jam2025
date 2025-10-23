@@ -56,7 +56,6 @@ fn main(input: FragmentInput) -> @location(0) vec4<f32> {
     let N = normalize(input.normal);
     let V = normalize(cameraPos - input.worldPos);
 
-    // Sample textures once
     let albedo = textureSample(albedo_tex, albedo_sampler, input.uv).rgb;
     let metallic = textureSample(metallic_tex, metallic_sampler, input.uv).r;
     let roughness = textureSample(roughness_tex, roughness_sampler, input.uv).r;
@@ -97,48 +96,4 @@ fn main(input: FragmentInput) -> @location(0) vec4<f32> {
     let mapped = pow(color, vec3<f32>(1.0 / gamma));
     return vec4<f32>(mapped, 1.0);
 }
-/*@fragment
-fn main(input: FragmentInput) -> @location(0) vec4<f32> {
-    let N = normalize(input.normal);
-    let V = normalize(cameraPos - input.worldPos);
-    let L = normalize(light.position - input.worldPos);
-    let H = normalize(V + L);
 
-    let distance    = length(light.position - input.worldPos);
-    let attenuation = 1.0 / (distance * distance);
-    let radiance    = light.color * attenuation;
-
-    // Sample textures
-    let albedo = textureSample(albedo_tex, albedo_sampler, input.uv).rgb;
-    let metallic = textureSample(metallic_tex, metallic_sampler, input.uv).r;
-    let roughness = textureSample(roughness_tex, roughness_sampler, input.uv).r;
-    let ao = textureSample(ao_tex, ao_sampler, input.uv).r;
-
-    let F0 = mix(vec3<f32>(0.04, 0.04, 0.04), albedo, metallic);
-
-    let NDF = distributionGGX(N, H, roughness);
-    let G   = geometrySmith(N, V, L, roughness);
-    let F   = fresnelSchlick(max(dot(H, V), 0.0), F0);
-
-    let numerator    = NDF * G * F;
-    let denominator  = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.001;
-    let specular     = numerator / denominator;
-
-    let kS = F;
-    var kD = vec3<f32>(1.0, 1.0, 1.0) - kS;
-    kD *= 1.0 - metallic;
-
-    let NdotL = max(dot(N, L), 0.0);
-
-    let Lo = (kD * albedo / 3.14159265 + specular) * radiance * NdotL;
-
-    let ambient = vec3<f32>(0.01, 0.01, 0.01) * albedo * ao;
-
-    let color = ambient + Lo;
-
-    // Gamma correction
-    let gamma = 2.2;
-    let mapped = pow(color, vec3<f32>(1.0 / gamma));
-
-    return vec4<f32>(mapped, 1.0);
-}*/

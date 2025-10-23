@@ -59,6 +59,7 @@ async fn main() {
 
             self.app.add_system(display_sprite, SystemStage::Update);
             self.app.add_system(control_player, SystemStage::Update);
+            self.app.add_system(spin, SystemStage::Update);
             self.app.add_system(init_scene, SystemStage::Init);
 
             self.app.init();
@@ -151,10 +152,10 @@ system! {
 
         use rand::prelude::*;
         let mut rng = rand::rng();
-        for i in -3..=3 {
+        for i in -10..=10 {
             let light = commands.spawn_entity();
             commands.add_component(light, Transform {
-                pos: Vec3::new(i as f32, 5.0, rng.random_range(-3.0..=3.0)),
+                pos: Vec3::new(i as f32, 5.0, rng.random_range(-10.0..=10.0)),
                 ..Default::default()
             });
 
@@ -184,7 +185,7 @@ system! {
                 Vec3::new(r1 + m, g1 + m, b1 + m)
             }
 
-            let color = hsv_to_rgb(hue, saturation, value) * 3.0;
+            let color = hsv_to_rgb(hue, saturation, value) * 10.0;
 
             commands.add_component(light, Light {
                 brightness: color,
@@ -218,6 +219,22 @@ system! {
 
         for sprite in sprites {
             gpu.display(sprite, (100.0, 100.0), (4.0, 4.0), 0.0, Align::Center);
+        }
+    }
+}
+
+system! {
+    fn spin(
+        time: res &Time,
+        objects: query (&mut Transform, &ModelHandle),
+    ) {
+        let Some(time) = time else {
+            return;
+        };
+
+        let delta = time.delta_seconds;
+        for (transform, _) in objects {
+            transform.rot = (Quat::from_axis_angle(Vec3::Y, delta) * transform.rot).normalize();
         }
     }
 }

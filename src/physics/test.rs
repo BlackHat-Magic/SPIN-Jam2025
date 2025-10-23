@@ -110,14 +110,14 @@ impl PhysicsTestWorld {
     pub fn spawn_random_body(&mut self) -> BodyHandle {
         let rng = &mut self.rng;
         let position = Vec3::new(
-            rng.gen_range(-2.0..=2.0),
-            rng.gen_range(0.5..=3.0),
-            rng.gen_range(-2.0..=2.0),
+            rng.random_range(-2.0..=2.0),
+            rng.random_range(0.5..=3.0),
+            rng.random_range(-2.0..=2.0),
         );
         let velocity = Vec3::new(
-            rng.gen_range(-1.0..=1.0),
-            rng.gen_range(-1.0..=1.0),
-            rng.gen_range(-1.0..=1.0),
+            rng.random_range(-1.0..=1.0),
+            rng.random_range(-1.0..=1.0),
+            rng.random_range(-1.0..=1.0),
         );
 
         self.add_body(BodyInit {
