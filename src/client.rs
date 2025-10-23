@@ -155,9 +155,12 @@ system! {
         for i in -10..=10 {
             let light = commands.spawn_entity();
             commands.add_component(light, Transform {
-                pos: Vec3::new(i as f32, 5.0, rng.random_range(-10.0..=10.0)),
+                pos: Vec3::new(i as f32, 5.0, rng.random_range(-100.0..=100.0)),
+                scale: Vec3::splat(0.1),
                 ..Default::default()
             });
+            commands.add_component(light, ModelHandle { path: "cube".into() });
+            commands.add_component(light, MaterialHandle { name: "test_mat".into() });
 
             let hue = rng.random_range((-std::f32::consts::PI)..=std::f32::consts::PI);
             let saturation = 1.0;

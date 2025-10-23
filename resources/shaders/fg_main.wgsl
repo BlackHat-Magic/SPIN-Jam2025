@@ -54,7 +54,7 @@ fn geometrySmith(N: vec3<f32>, V: vec3<f32>, L: vec3<f32>, roughness: f32) -> f3
 @fragment
 fn main(input: FragmentInput) -> @location(0) vec4<f32> {
     let N = normalize(input.normal);
-    let V = normalize(cameraPos - input.worldPos);
+    let V = -normalize(cameraPos - input.worldPos);
 
     let albedo = textureSample(albedo_tex, albedo_sampler, input.uv).rgb;
     let metallic = textureSample(metallic_tex, metallic_sampler, input.uv).r;
