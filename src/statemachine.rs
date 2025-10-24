@@ -23,23 +23,30 @@ impl Default for StateMachine {
                 y: 1.0,
                 z: 1.0,
             },
+            rand: 0,
             rot: Direction::Up,
         }
     }
+}
 
-    fn direction_change(&mut self, rand: i32) -> &self {
-        if self.rand == 0 {
-            self.rot = Direction::Up;
+impl StateMachine {
+    pub fn direction_change(&mut self) -> &Self {
+        match self.rand {
+            0 => {
+                self.rot = Direction::Up;
+            }
+            1 => {
+                self.rot = Direction::Down;
+            }
+            2 => {
+                self.rot = Direction::Left;
+            }
+            3 => {
+                self.rot = Direction::Right;
+            }
+            _ => {}
         }
-        else if self.rand == 1 {
-            self.rot = Direction::Down;
-        }
-        else if self.rand == 2 {
-            self.rot = Direction::Left;
-        }
-        else if self.rand == 3 {
-            self.rot = Direction::Right;
-        }  
+        self
     }
 }
 

@@ -41,5 +41,5 @@ name = "topdown"
 path = "src/topdown.rs"
 
 [[bin]]
-name = "enemy"
-path = "src/enemy.rs"
+name = "statemachine"
+path = "src/statemachine.rs"
