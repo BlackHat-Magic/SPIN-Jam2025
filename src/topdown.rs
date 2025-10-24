@@ -53,7 +53,6 @@ async fn main() {
 
             self.app.add_system(draw_sprites, SystemStage::Update);
             self.app.add_system(control_player, SystemStage::Update);
-            // self.app.add_system(spin, SystemStage::Update);
             self.app.add_system(init_scene, SystemStage::Init);
 
             self.app.init();
@@ -132,8 +131,9 @@ system! {
         let player = commands.spawn_entity();
         commands.add_component(player, SpriteBuilder::default().build(gpu, images));
         commands.add_component(player, Transform {
-            pos: Vec3::new(0.0, 0.0, -5.0),
+            pos: Vec3::new(0.0, 0.0, 0.0),
             rot: Quat::look_to_rh(Vec3::Z, Vec3::Y),
+            scale: Vec3::new(1.0, 1.0, 0.0),
             ..Default::default()
         });
         commands.add_component(player, Camera::new(
@@ -142,23 +142,49 @@ system! {
             0.1,
             100.0,
         ));
+
+        // I hath decided: 1 unit is 32 px
+        let background = commands.spawn_entity();
+        commands.add_component(background, SpriteBuilder::default().build(gpu, images));
+        commands.add_component(background, Transform {
+            pos: Vec3::new(0.0, 0.0, 0.0),
+            rot: Quat::look_to_rh(Vec3::Z, Vec3::Y),
+            scale: Vec3::new(22.0, 22.0, 0.0),
+            ..Default::default()
+        });
+
+        let enemy = commands.spawn_entity();
+        commands.add_component(enemy, SpriteBuilder::default().build(gpu, images));
+        commands.add_component(enemy, Transform {
+            pos: Vec3::new(4.0, 4.0, 0.0),
+            rot: Quat::look_to_rh(Vec3::Z, Vec3::Y),
+            scale: Vec3::new(1.0, 1.0, 0.0),
+            ..Default::default()
+        });
     }
 }
 
 system! {
     fn draw_sprites(
         gpu: res &mut Gpu,
-        player: query (&Sprite, &Transform),
+        sprites: query (&Sprite, &Transform),
+        player: query (&Transform, &Camera)
     ) {
         let Some(gpu) = gpu else {return;};
-        let Some((player_sprite, player_transform)) = player.next() else {return;};
+        let Some((player_transform, _camera)) = player.next() else {return;};
 
-        gpu.display(player_sprite,
-            (player_transform.pos.x, player_transform.pos.y),
-            (4.0, 4.0),
-            0.0,
-            Align::Center
-        );
+        for (sprite, transform) in sprites {
+            let relative_x = transform.pos.x - player_transform.pos.x;
+            let relative_y = transform.pos.y - player_transform.pos.y;
+            let x_px = relative_x * 32.0 + 640.0;
+            let y_px = relative_y * 32.0 + 360.0;
+            gpu.display(sprite,
+                (x_px, y_px),
+                (transform.scale.x, transform.scale.y),
+                0.0,
+                Align::Center
+            );
+        }
     }
 }
 
@@ -178,11 +204,10 @@ system! {
         if input.is_key_pressed(winit::keyboard::KeyCode::KeyS) {movement += Vec3::Y;}
         if input.is_key_pressed(winit::keyboard::KeyCode::KeyA) {movement -= Vec3::X;}
         if input.is_key_pressed(winit::keyboard::KeyCode::KeyD) {movement += Vec3::X;}
-
         // uses `length_squared` to avoid a square root calculation
         if movement.length_squared() > 0.0 {
             movement = movement.normalize();
-            movement = movement * 250.0 * time.delta_seconds;
+            movement = movement * 10.0 * time.delta_seconds;
             player_transform.pos += movement;
         }
     }
