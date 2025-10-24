@@ -11,10 +11,12 @@ use winit::{
 pub use ecs::*;
 pub use networking::*;
 
+pub mod audio;
 pub mod physics;
 pub mod render;
 pub mod utils;
 
+pub use audio::*;
 pub use physics::*;
 pub use render::model::ModelHandle;
 use render::sprite::*;
@@ -28,8 +30,24 @@ pub struct TestMessage {
     pub content: String,
 }
 
+fn test() -> anyhow::Result<()> {
+    use rodio::*;
+    let stream_handle = rodio::OutputStreamBuilder::open_default_stream()?;
+    let sink = rodio::Sink::connect_new(stream_handle.mixer());
+
+    let file = std::fs::File::open("resources/sounds/example.ogg")?;
+    let source = rodio::Decoder::try_from(file)?.buffered();
+    println!("Duration: {:?}", source.total_duration());
+    sink.append(source);
+
+    sink.sleep_until_end();
+
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() {
+    //test().unwrap();
     let mut app = App::new();
 
     struct WinitApp {
@@ -51,6 +69,7 @@ async fn main() {
             let plugins = plugin_group!(
                 physics::PhysicsPlugin,
                 render::RenderPlugin,
+                audio::AudioPlugin,
                 utils::UtilPlugin::client(),
                 networking::NetworkingPlugin::client(),
             );
@@ -128,11 +147,14 @@ system! {
     fn init_scene(
         images: res &Images,
         gpu: res &Gpu,
+        audio: res &Audio,
         commands: commands,
     ) {
-        let (Some(gpu), Some(images)) = (gpu, images) else {
+        let (Some(gpu), Some(images), Some(audio)) = (gpu, images, audio) else {
             return;
         };
+
+        audio.play("example", 0.2, true);
 
         let sprite = commands.spawn_entity();
         commands.add_component(sprite, SpriteBuilder::default().build(gpu, images));
@@ -152,15 +174,45 @@ system! {
 
         use rand::prelude::*;
         let mut rng = rand::rng();
-        for i in -10..=10 {
-            let light = commands.spawn_entity();
-            commands.add_component(light, Transform {
-                pos: Vec3::new(i as f32, 5.0, rng.random_range(-100.0..=100.0)),
-                scale: Vec3::splat(0.1),
+
+        for _ in 0..50 {
+            let pos = Vec3::new(
+                rng.random_range(-50.0..=50.0),
+                0.0,
+                rng.random_range(-50.0..=50.0),
+            );
+
+            let cube = commands.spawn_entity();
+            commands.add_component(cube, Transform {
+                pos,
                 ..Default::default()
             });
-            commands.add_component(light, ModelHandle { path: "cube".into() });
-            commands.add_component(light, MaterialHandle { name: "test_mat".into() });
+            commands.add_component(cube, ModelHandle { path: "cube".into() });
+            commands.add_component(cube, MaterialHandle { name: "test_mat".into() });
+        }
+
+        for _ in 0..50 {
+            let pos = Vec3::new(
+                rng.random_range(-50.0..=50.0),
+                0.0,
+                rng.random_range(-50.0..=50.0),
+            );
+
+            let cube = commands.spawn_entity();
+            commands.add_component(cube, Transform {
+                pos,
+                ..Default::default()
+            });
+            commands.add_component(cube, ModelHandle { path: "sphere".into() });
+            commands.add_component(cube, MaterialHandle { name: "test_mat".into() });
+        }
+
+        for i in 0..50 {
+            let light = commands.spawn_entity();
+            commands.add_component(light, Transform {
+                pos: Vec3::new(rng.random_range(-50.0..=50.0), 5.0, rng.random_range(-50.0..=50.0)),
+                ..Default::default()
+            });
 
             let hue = rng.random_range((-std::f32::consts::PI)..=std::f32::consts::PI);
             let saturation = 1.0;
@@ -206,7 +258,7 @@ system! {
             45.0_f32.to_radians(),
             800.0 / 600.0,
             0.1,
-            100.0,
+            1000.0,
         ));
     }
 }
