@@ -145,7 +145,12 @@ system! {
 
         // I hath decided: 1 unit is 32 px
         let background = commands.spawn_entity();
-        commands.add_component(background, SpriteBuilder::default().build(gpu, images));
+        commands.add_component(background, SpriteBuilder {
+            image_path: "clue_simplified".to_string(),
+            w: 22,
+            h: 22,
+            ..Default::default()
+        }.build(gpu, images));
         commands.add_component(background, Transform {
             pos: Vec3::new(0.0, 0.0, 0.0),
             rot: Quat::look_to_rh(Vec3::Z, Vec3::Y),
