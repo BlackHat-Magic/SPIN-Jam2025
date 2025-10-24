@@ -221,7 +221,7 @@ system! {
         };
 
         for sprite in sprites {
-            gpu.display(sprite, (100.0, 100.0), (4.0, 4.0), 0.0, Align::Center);
+            gpu.display(sprite, (200.0, 200.0), (4.0, 4.0), 0.0, Align::Center);
         }
     }
 }

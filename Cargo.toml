@@ -35,3 +35,7 @@ path = "src/client.rs"
 [[bin]]
 name = "server"
 path = "src/server.rs"
+
+[[bin]]
+name = "topdown"
+path = "src/topdown.rs"
