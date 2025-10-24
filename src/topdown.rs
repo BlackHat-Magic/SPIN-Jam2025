@@ -127,22 +127,6 @@ system! {
             return;
         };
 
-        // player
-        let player = commands.spawn_entity();
-        commands.add_component(player, SpriteBuilder::default().build(gpu, images));
-        commands.add_component(player, Transform {
-            pos: Vec3::new(0.0, 0.0, 0.0),
-            rot: Quat::look_to_rh(Vec3::Z, Vec3::Y),
-            scale: Vec3::new(1.0, 1.0, 0.0),
-            ..Default::default()
-        });
-        commands.add_component(player, Camera::new(
-            45.0_f32.to_radians(),
-            800.0 / 600.0,
-            0.1,
-            100.0,
-        ));
-
         // I hath decided: 1 unit is 32 px
         let background = commands.spawn_entity();
         commands.add_component(background, SpriteBuilder {
@@ -157,36 +141,57 @@ system! {
             scale: Vec3::new(22.0, 22.0, 0.0),
             ..Default::default()
         });
+        commands.add_component(background, Rotation2D(0.0));
 
-        let enemy = commands.spawn_entity();
-        commands.add_component(enemy, SpriteBuilder::default().build(gpu, images));
-        commands.add_component(enemy, Transform {
-            pos: Vec3::new(4.0, 4.0, 0.0),
+        // player
+        let player = commands.spawn_entity();
+        commands.add_component(player, SpriteBuilder::default().build(gpu, images));
+        commands.add_component(player, Transform {
+            pos: Vec3::new(0.0, 0.0, 0.1),
             rot: Quat::look_to_rh(Vec3::Z, Vec3::Y),
             scale: Vec3::new(1.0, 1.0, 0.0),
             ..Default::default()
         });
+        commands.add_component(player, Camera::new(
+            45.0_f32.to_radians(),
+            800.0 / 600.0,
+            0.1,
+            100.0,
+        ));
+        commands.add_component(player, Rotation2D(3.14 / 4.0));
+
+        let enemy = commands.spawn_entity();
+        commands.add_component(enemy, SpriteBuilder::default().build(gpu, images));
+        commands.add_component(enemy, Transform {
+            pos: Vec3::new(4.0, 4.0, 0.2),
+            rot: Quat::look_to_rh(Vec3::Z, Vec3::Y),
+            scale: Vec3::new(1.0, 1.0, 0.0),
+            ..Default::default()
+        });
+        commands.add_component(enemy, Rotation2D(0.0));
     }
 }
 
 system! {
     fn draw_sprites(
         gpu: res &mut Gpu,
-        sprites: query (&Sprite, &Transform),
+        sprites: query (&Sprite, &Transform, &Rotation2D),
         player: query (&Transform, &Camera)
     ) {
         let Some(gpu) = gpu else {return;};
         let Some((player_transform, _camera)) = player.next() else {return;};
 
-        for (sprite, transform) in sprites {
+        for (sprite, transform, rotation) in sprites {
             let relative_x = transform.pos.x - player_transform.pos.x;
             let relative_y = transform.pos.y - player_transform.pos.y;
+            let z_index = transform.pos.z;
             let x_px = relative_x * 32.0 + 640.0;
             let y_px = relative_y * 32.0 + 360.0;
             gpu.display(sprite,
                 (x_px, y_px),
                 (transform.scale.x, transform.scale.y),
-                0.0,
+                rotation.0,
+                z_index,
                 Align::Center
             );
         }
@@ -197,11 +202,11 @@ system! {
     fn control_player(
         input: res &mut Input,
         time: res &Time,
-        player: query (&mut Transform, &Camera),
+        player: query (&mut Transform, &Camera, &mut Rotation2D),
     ) {
         let Some (input) = input else {return;};
         let Some (time) = time else {return;};
-        let Some((player_transform, _camera)) = player.next() else {return;};
+        let Some((player_transform, _camera, rotation)) = player.next() else {return;};
 
         // WASD
         let mut movement = Vec3::ZERO;
@@ -215,5 +220,10 @@ system! {
             movement = movement * 10.0 * time.delta_seconds;
             player_transform.pos += movement;
         }
+
+        let (mousex, mousey) = input.get_mouse_position();
+        let to_mousex = mousex - 640.0;
+        let to_mousey = mousey - 360.0;
+        rotation.0 = to_mousey.atan2(to_mousex) as f32;
     }
 }
