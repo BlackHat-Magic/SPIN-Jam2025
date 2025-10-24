@@ -1,5 +1,6 @@
 pub mod model;
 pub mod sprite;
+pub mod ui;
 
 use crate::*;
 
