@@ -32,9 +32,6 @@ pub struct Transform {
     pub rot: Quat,
 }
 
-#[derive(Component)]
-pub struct Rotation2D(pub f32); // rotation in radians
-
 impl Default for Transform {
     fn default() -> Self {
         Self {
