@@ -39,3 +39,7 @@ path = "src/server.rs"
 [[bin]]
 name = "topdown"
 path = "src/topdown.rs"
+
+[[bin]]
+name = "enemy"
+path = "src/enemy.rs"

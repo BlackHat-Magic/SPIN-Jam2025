@@ -23,6 +23,9 @@ use utils::input::Input;
 pub use utils::time::*;
 pub use utils::*;
 
+//Brandon's Enemy AI
+use rand::prelude::*;
+
 #[tokio::main]
 async fn main() {
     let mut app = App::new();
@@ -53,6 +56,7 @@ async fn main() {
 
             self.app.add_system(draw_sprites, SystemStage::Update);
             self.app.add_system(control_player, SystemStage::Update);
+            self.app.add_system(enemy_movement, SystemStage::Update);
             self.app.add_system(init_scene, SystemStage::Init);
 
             self.app.init();
@@ -189,6 +193,29 @@ system! {
                 0.0,
                 Align::Center
             );
+        }
+    }
+}
+
+system! {
+    fn enemy_movement(
+        time: res &Time,
+    ) {
+        let Some(time) = time else {return;};
+        let mut movement = Vec3::ZERO;
+        let mut rng = rand::rng();
+        let facing = rng.random_range(0..=3);
+        if facing == 0 {
+            println!("up");
+        }
+        if facing == 1 {
+            println!("right");
+        }
+        if facing == 2 {
+            println!("down");
+        }
+        if facing == 3 {
+            println!("left")
         }
     }
 }
