@@ -131,21 +131,26 @@ system! {
         let background = commands.spawn_entity();
         commands.add_component(background, SpriteBuilder {
             image_path: "clue_simplified".to_string(),
-            w: 22,
-            h: 22,
+            w: 795,
+            h: 795,
             ..Default::default()
         }.build(gpu, images));
         commands.add_component(background, Transform {
             pos: Vec3::new(0.0, 0.0, 0.0),
             rot: Quat::look_to_rh(Vec3::Z, Vec3::Y),
-            scale: Vec3::new(22.0, 22.0, 0.0),
+            scale: Vec3::new(0.8855, 0.8855, 0.0),
             ..Default::default()
         });
         commands.add_component(background, Rotation2D(0.0));
 
         // player
         let player = commands.spawn_entity();
-        commands.add_component(player, SpriteBuilder::default().build(gpu, images));
+        commands.add_component(player, SpriteBuilder {
+            image_path: "rawr".to_string(),
+            w: 32,
+            h: 32,
+            ..Default::default()
+        }.build(gpu, images));
         commands.add_component(player, Transform {
             pos: Vec3::new(0.0, 0.0, 0.1),
             rot: Quat::look_to_rh(Vec3::Z, Vec3::Y),
@@ -161,7 +166,12 @@ system! {
         commands.add_component(player, Rotation2D(3.14 / 4.0));
 
         let enemy = commands.spawn_entity();
-        commands.add_component(enemy, SpriteBuilder::default().build(gpu, images));
+        commands.add_component(enemy, SpriteBuilder {
+            image_path: "rawr".to_string(),
+            w: 32,
+            h: 32,
+            ..Default::default()
+        }.build(gpu, images));
         commands.add_component(enemy, Transform {
             pos: Vec3::new(4.0, 4.0, 0.2),
             rot: Quat::look_to_rh(Vec3::Z, Vec3::Y),
