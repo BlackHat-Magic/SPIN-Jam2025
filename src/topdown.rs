@@ -198,29 +198,6 @@ system! {
 }
 
 system! {
-    fn enemy_movement(
-        time: res &Time,
-    ) {
-        let Some(time) = time else {return;};
-        let mut movement = Vec3::ZERO;
-        let mut rng = rand::rng();
-        let facing = rng.random_range(0..=3);
-        if facing == 0 {
-            println!("up");
-        }
-        if facing == 1 {
-            println!("right");
-        }
-        if facing == 2 {
-            println!("down");
-        }
-        if facing == 3 {
-            println!("left")
-        }
-    }
-}
-
-system! {
     fn control_player(
         input: res &mut Input,
         time: res &Time,
