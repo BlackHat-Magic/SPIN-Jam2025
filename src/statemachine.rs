@@ -48,6 +48,10 @@ pub struct StateMachine {
     pub direction: Direction, //directional facing
 }
 
+//TODO:
+//Build a struct builder which allows for the setting of diffeent
+//positions, directional facings, movement (Idle, moving)
+
 
 impl Default for StateMachine {
     fn default() -> Self {
