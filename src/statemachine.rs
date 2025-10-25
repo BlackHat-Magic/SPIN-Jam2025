@@ -27,6 +27,7 @@ pub use utils::*;
 pub use rand::prelude::*;
 // pub use utils::time;
 use std::time::{Instant, Duration};
+use std::thread;
 
 //within a system
 //Should probably not be returning it
@@ -45,8 +46,6 @@ pub struct StateMachine {
     pub pos: Vec3,
     pub scale: Vec3,
     pub direction: Direction, //directional facing
-    pub idle: Duration, //idle time
-    pub wait: Duration, //waiting time
 }
 
 
@@ -60,8 +59,6 @@ impl Default for StateMachine {
                 z: 1.0,
             },
             direction: Direction::Up,
-            idle: Duration::from_secs(2),
-            wait: Duration::from_secs(0),
         }
     }
 }
@@ -127,12 +124,8 @@ impl StateMachine {
 fn main() {
     let mut direction = StateMachine::default();
 
-    let mut now = Instant::now();
     loop {
-        direction.wait += now.elapsed();
-        if direction.wait >= direction.idle {
-            now = Instant::now();
-            direction.enemy_movement_opportunity();
-        }
+        direction.enemy_movement_opportunity();
+        thread::sleep(Duration::from_secs(2));
     }
 }

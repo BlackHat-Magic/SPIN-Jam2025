@@ -5,6 +5,8 @@ use super::{Displayable, Gpu, Images};
 
 use crate::*;
 
+use utils::time::*;
+
 #[derive(Clone)]
 pub struct PalleteSwap {
     pub from: Vec<Rgba<u8>>,
