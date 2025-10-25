@@ -1,5 +1,6 @@
 pub mod model;
 pub mod sprite;
+pub mod ui;
 
 use crate::*;
 
@@ -232,7 +233,7 @@ impl Shaders {
             let file_extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
 
             let shader = match file_extension {
-                #[cfg(debug_assertions)]
+                //#[cfg(debug_assertions)]
                 "wgsl" => gpu
                     .device
                     .create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -243,7 +244,7 @@ impl Shaders {
                                 .into(),
                         ),
                     }),
-                #[cfg(not(debug_assertions))]
+                /*#[cfg(not(debug_assertions))]
                 "spv" => {
                     let shader_data: Vec<u8> =
                         std::fs::read(&path).expect("Failed to read shader file");
@@ -254,7 +255,7 @@ impl Shaders {
                             label: path.to_str(),
                             source,
                         })
-                }
+                }*/
                 _ => {
                     println!(
                         "Warning: Unsupported shader file extension: .{} at {:?}",
@@ -761,7 +762,6 @@ system!(
                     label: None,
                     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                         view: &texture_view,
-                        depth_slice: None,
                         resolve_target: None,
                         ops: wgpu::Operations {
                             load: wgpu::LoadOp::Clear(wgpu::Color {
@@ -909,7 +909,6 @@ system!(
                     label: None,
                     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                         view: &texture_view,
-                        depth_slice: None,
                         resolve_target: None,
                         ops: wgpu::Operations {
                             load: wgpu::LoadOp::Load,
@@ -963,6 +962,7 @@ system!(
                     let y = 1.0 - quad.rect.1 / h * 2.0;
                     let x2 = (quad.rect.0 + quad.rect.2) / w * 2.0 - 1.0;
                     let y2 = 1.0 - (quad.rect.1 + quad.rect.3) / h * 2.0;
+
                     let buffer = gpu
                         .device
                         .create_buffer_init(&wgpu::util::BufferInitDescriptor {

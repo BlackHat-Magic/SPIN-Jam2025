@@ -30,24 +30,8 @@ pub struct TestMessage {
     pub content: String,
 }
 
-fn test() -> anyhow::Result<()> {
-    use rodio::*;
-    let stream_handle = rodio::OutputStreamBuilder::open_default_stream()?;
-    let sink = rodio::Sink::connect_new(stream_handle.mixer());
-
-    let file = std::fs::File::open("resources/sounds/example.ogg")?;
-    let source = rodio::Decoder::try_from(file)?.buffered();
-    println!("Duration: {:?}", source.total_duration());
-    sink.append(source);
-
-    sink.sleep_until_end();
-
-    Ok(())
-}
-
 #[tokio::main]
 async fn main() {
-    //test().unwrap();
     let mut app = App::new();
 
     struct WinitApp {
@@ -70,6 +54,7 @@ async fn main() {
                 physics::PhysicsPlugin,
                 render::RenderPlugin,
                 audio::AudioPlugin,
+                render::ui::UiPlugin,
                 utils::UtilPlugin::client(),
                 networking::NetworkingPlugin::client(),
             );
@@ -272,9 +257,9 @@ system! {
             return;
         };
 
-        for sprite in sprites {
-            gpu.display(sprite, (100.0, 100.0), (4.0, 4.0), 0.0, Align::Center);
-        }
+        //for sprite in sprites {
+        //    gpu.display(sprite, (100.0, 100.0), (4.0, 4.0), 0.0, Align::Center);
+        //}
     }
 }
 

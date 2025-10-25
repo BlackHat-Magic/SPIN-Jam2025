@@ -35,13 +35,13 @@ fn compile_and_copy_files(from: &Path, to: &Path) {
         } else {
             let file_name = path.file_name().unwrap();
 
-            #[cfg(debug_assertions)]
-            {
-                let new_file = to.join(file_name);
-                std::fs::copy(&path, &new_file).unwrap();
-            }
+            //#[cfg(debug_assertions)]
+            //{
+            let new_file = to.join(file_name);
+            std::fs::copy(&path, &new_file).unwrap();
+            //}
 
-            #[cfg(not(debug_assertions))]
+            /*#[cfg(not(debug_assertions))]
             {
                 let file_extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
 
@@ -85,7 +85,7 @@ fn compile_and_copy_files(from: &Path, to: &Path) {
                     .arg("-o")
                     .arg(&new_file)
                     .output();
-            }
+            }*/
         }
     }
 }
