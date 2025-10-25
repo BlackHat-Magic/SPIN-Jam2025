@@ -7,5 +7,30 @@
     "height": 1.0
   },
   "id": "root",
-  "children": []
+  "children": [
+    {
+      "type": "Text",
+      "rect": {
+        "x": 100.0,
+        "y": 300.0,
+        "width": 2.0,
+        "height": 2.0
+      },
+      "id": "title",
+      "content": "SPIN-GameJam 2025",
+      "size": 24.0,
+      "font": "IndieFlower"
+    },
+    {
+      "type": "Image",
+      "rect": {
+        "x": 300.0,
+        "y": 300.0,
+        "width": 4.0,
+        "height": 4.0
+      },
+      "id": "test image",
+      "image": "rawr"
+    }
+  ]
 }

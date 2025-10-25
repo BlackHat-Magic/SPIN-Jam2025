@@ -129,9 +129,12 @@ impl SpriteBuilder {
             pallete_swap.apply(&mut img);
         }
 
+        let w = img.width();
+        let h = img.height();
+
         let size = wgpu::Extent3d {
-            width: img.width(),
-            height: img.height(),
+            width: w,
+            height: h,
             depth_or_array_layers: 1,
         };
 
@@ -148,9 +151,6 @@ impl SpriteBuilder {
             view_formats: &[],
         });
 
-        let w = img.width();
-        let h = img.height();
-
         gpu.queue.write_texture(
             TexelCopyTextureInfo {
                 texture: &tex,
@@ -161,14 +161,10 @@ impl SpriteBuilder {
             img.into_raw().as_slice(),
             TexelCopyBufferLayout {
                 offset: 0,
-                bytes_per_row: Some(4 * self.w),
-                rows_per_image: Some(self.h),
+                bytes_per_row: Some(4 * w),
+                rows_per_image: Some(h),
             },
-            Extent3d {
-                width: self.w,
-                height: self.h,
-                depth_or_array_layers: 1,
-            },
+            size,
         );
 
         Sprite { h, w, tex }
