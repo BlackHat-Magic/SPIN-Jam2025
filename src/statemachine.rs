@@ -20,11 +20,13 @@ pub use render::model::ModelHandle;
 use render::sprite::*;
 pub use render::*;
 use utils::input::Input;
-pub use utils::time::*;
+// pub use utils::time::*;
 pub use utils::*;
 
 //Brandon's Enemy AI
-use rand::prelude::*;
+pub use rand::prelude::*;
+// pub use utils::time;
+use std::time::{Instant, Duration};
 
 //within a system
 //Should probably not be returning it
@@ -42,8 +44,9 @@ pub enum Direction {
 pub struct StateMachine {
     pub pos: Vec3,
     pub scale: Vec3,
-    pub rand: i32,
-    pub direction: Direction,
+    pub direction: Direction, //directional facing
+    pub idle: Duration, //idle time
+    pub wait: Duration, //waiting time
 }
 
 
@@ -56,8 +59,9 @@ impl Default for StateMachine {
                 y: 1.0,
                 z: 1.0,
             },
-            rand: 0,
             direction: Direction::Up,
+            idle: Duration::from_secs(2),
+            wait: Duration::from_secs(0),
         }
     }
 }
@@ -105,23 +109,30 @@ impl StateMachine {
             println!("Direction change hasn't occured");
         }
     }
-}
 
-fn enemy_waiting(
-    time: res &Time,
-) {
-    let Some(time) = time else {return;};
-    
+    //Trying to implement a waiting time of 3 seconds for the enemies
+    //Waiting time on head movement can be randomized, but that may add too much rng
+    //So it may just be better to just stick with a set movement.
+    // fn enemy_waiting(
+    //     &mut self,
+    // ) {
+    //     self.wait += delta_seconds;
+    //     if self.wait > self.idle {
+    //         self.enemy_movement_opportunity();
+    //         self.wait = 0;
+    //     }
+    // }
 }
-
 
 fn main() {
     let mut direction = StateMachine::default();
 
-    for i in (0..10) {
-        direction.enemy_movement_opportunity();
+    let mut now = Instant::now();
+    loop {
+        direction.wait += now.elapsed();
+        if direction.wait >= direction.idle {
+            now = Instant::now();
+            direction.enemy_movement_opportunity();
+        }
     }
-    // direction.rand = 1;
-    // direction.direction_change();
-    // println!("Direction the enemy is currently facing: {:?}", direction.direction);
 }

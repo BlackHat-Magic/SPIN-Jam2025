@@ -56,7 +56,6 @@ async fn main() {
 
             self.app.add_system(draw_sprites, SystemStage::Update);
             self.app.add_system(control_player, SystemStage::Update);
-            self.app.add_system(enemy_movement, SystemStage::Update);
             self.app.add_system(init_scene, SystemStage::Init);
 
             self.app.init();
