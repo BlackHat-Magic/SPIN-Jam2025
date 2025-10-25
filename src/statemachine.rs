@@ -98,7 +98,7 @@ impl StateMachine {
     //(Could be assigned in the default variable)
     pub fn enemy_movement_opportunity(&mut self) {
         let mut rng = rand::rng();
-        if rng.random_range(0..10) == 0 {
+        if rng.random_range(0..4) <= 1 {
             println!("Direction change occuring");
             self.direction_change();
         }
@@ -106,24 +106,13 @@ impl StateMachine {
             println!("Direction change hasn't occured");
         }
     }
-
-    //Trying to implement a waiting time of 3 seconds for the enemies
-    //Waiting time on head movement can be randomized, but that may add too much rng
-    //So it may just be better to just stick with a set movement.
-    // fn enemy_waiting(
-    //     &mut self,
-    // ) {
-    //     self.wait += delta_seconds;
-    //     if self.wait > self.idle {
-    //         self.enemy_movement_opportunity();
-    //         self.wait = 0;
-    //     }
-    // }
 }
 
 fn main() {
     let mut direction = StateMachine::default();
 
+    //Loops for every 2 seconds. This probably isn't the most efficient.
+    //I had tried other ideas in previous pushes.
     loop {
         direction.enemy_movement_opportunity();
         thread::sleep(Duration::from_secs(2));
