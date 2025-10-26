@@ -49,15 +49,18 @@ impl UiState {
     fn load(gpu: &Gpu, images: &Images) -> (Self, UiNodes) {
         let mut font_db = fontdb::Database::new();
         let font_map = gather_dir("fonts", |path| {
-            if !path.extension()
+            if !path
+                .extension()
                 .and_then(|s| s.to_str())
                 .map(|s| matches!(s, "ttf" | "otf" | "woff" | "woff2"))
-                .unwrap_or(false) {
-                    return None;
-                }
+                .unwrap_or(false)
+            {
+                return None;
+            }
 
             Some(font_db.load_font_source(fontdb::Source::File(path.to_path_buf()))[0])
-        }).expect("could not load fonts");
+        })
+        .expect("could not load fonts");
         let mut fonts = FontSystem::new_with_locale_and_db("US".to_string(), font_db);
 
         let nodes = gather_dir("ui", |path| {
@@ -65,7 +68,14 @@ impl UiState {
             serde_json::from_str::<SerializedUiNode>(&file).ok()
         })
         .unwrap();
-        let root = UiNode::from_serialized(nodes.get("root").unwrap(), &nodes, gpu, &mut fonts, images, &font_map);
+        let root = UiNode::from_serialized(
+            nodes.get("root").unwrap(),
+            &nodes,
+            gpu,
+            &mut fonts,
+            images,
+            &font_map,
+        );
 
         (
             UiState {
@@ -97,6 +107,7 @@ enum SerializedUiNode {
         rect: Rect,
         id: String,
         content: String,
+        color: Option<String>,
         font: String,
         size: f32,
     },
@@ -158,17 +169,33 @@ impl UiNode {
                 id,
                 content,
                 font,
+                color,
                 size,
             } => {
-                let mut text_displayable =
-                    TextDisplayable::new(content.clone(), *font_map.get(font).unwrap(), *size);
-                text_displayable.prepare(&gpu, fonts).expect(&format!("failed to prepare text {}", &content));
+                let mut text_displayable = TextDisplayable::new(
+                    content.clone(),
+                    *font_map.get(font).unwrap(),
+                    *size,
+                    color.clone().map(|c| {
+                        debug_assert!(c.len() == 7 && c.starts_with('#'));
+                        let color_code = &c[1..];
+
+                        let r = u8::from_str_radix(&color_code[0..2], 16).unwrap();
+                        let g = u8::from_str_radix(&color_code[2..4], 16).unwrap();
+                        let b = u8::from_str_radix(&color_code[4..6], 16).unwrap();
+
+                        [r, g, b]
+                    }),
+                );
+                text_displayable
+                    .prepare(gpu, fonts)
+                    .expect(&format!("failed to prepare text {}", &content));
                 Self::Text {
                     rect: *rect,
                     text_displayable,
                     id: id.clone(),
                 }
-        },
+            }
             SerializedUiNode::Image { rect, id, image } => Self::Image {
                 rect: *rect,
                 id: id.clone(),
@@ -180,9 +207,14 @@ impl UiNode {
                     .build(gpu, images)
                 },
             },
-            SerializedUiNode::SubFile { file_path } => {
-                UiNode::from_serialized(nodes.get(file_path).unwrap(), nodes, gpu, fonts, images, font_map)
-            }
+            SerializedUiNode::SubFile { file_path } => UiNode::from_serialized(
+                nodes.get(file_path).unwrap(),
+                nodes,
+                gpu,
+                fonts,
+                images,
+                font_map,
+            ),
         }
     }
 
@@ -235,18 +267,20 @@ pub struct TextDisplayable {
     content: String,
     font: ID,
     size: f32,
+    color: [u8; 3],
     texture: Option<wgpu::Texture>,
     extent: Option<wgpu::Extent3d>,
 }
 
 impl TextDisplayable {
-    pub fn new(content: String, font: ID, size: f32) -> Self {
+    pub fn new(content: String, font: ID, size: f32, color: Option<[u8; 3]>) -> Self {
         Self {
             content,
             font,
             size,
             texture: None,
             extent: None,
+            color: color.unwrap_or([255, 255, 255]),
         }
     }
 
@@ -298,9 +332,11 @@ impl TextDisplayable {
         });
 
         let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let mut encoder = gpu.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("Text Render Encoder"),
-        });
+        let mut encoder = gpu
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Text Render Encoder"),
+            });
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Text Render Pass"),
@@ -317,10 +353,7 @@ impl TextDisplayable {
             });
             let mut viewport = glyphon::Viewport::new(&gpu.device, &cache);
 
-            viewport.update(&gpu.queue, Resolution {
-                width,
-                height,
-            });
+            viewport.update(&gpu.queue, Resolution { width, height });
 
             let text_areas = vec![glyphon::TextArea {
                 buffer: &buffer,
@@ -328,12 +361,22 @@ impl TextDisplayable {
                 top: 0.0,
                 scale: 1.0,
                 bounds: TextBounds::default(),
-                default_color: Color::rgb(255, 255, 255),
+                default_color: Color::rgb(self.color[0], self.color[1], self.color[2]),
                 custom_glyphs: &[],
             }];
 
-            renderer.prepare(&gpu.device, &gpu.queue, fonts, &mut atlas, &viewport, text_areas, &mut swash_cache)?;
-            renderer.render(&atlas, &viewport, &mut render_pass).unwrap();
+            renderer.prepare(
+                &gpu.device,
+                &gpu.queue,
+                fonts,
+                &mut atlas,
+                &viewport,
+                text_areas,
+                &mut swash_cache,
+            )?;
+            renderer
+                .render(&atlas, &viewport, &mut render_pass)
+                .unwrap();
 
             atlas.trim();
         }

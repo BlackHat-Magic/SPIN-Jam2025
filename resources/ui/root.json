@@ -19,7 +19,8 @@
       "id": "title",
       "content": "SPIN-GameJam 2025",
       "size": 24.0,
-      "font": "IndieFlower"
+      "font": "IndieFlower",
+      "color": "#ff70ff"
     },
     {
       "type": "Image",
