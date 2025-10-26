@@ -1,0 +1,10 @@
+{
+  "type": "Container",
+  "id": "root",
+  "children": [
+    {
+      "type": "SubFile",
+      "file_path": "menu"
+    }
+  ]
+}

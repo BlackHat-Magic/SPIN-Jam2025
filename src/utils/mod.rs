@@ -79,7 +79,7 @@ pub fn save_resource_json<T: serde::ser::Serialize>(relative_path: &str, data: &
     save_resource_string(relative_path, &json)
 }
 
-fn gather_all_files(root: &PathBuf) -> Result<Vec<PathBuf>> {
+pub fn gather_all_files(root: &PathBuf) -> Result<Vec<PathBuf>> {
     let read_dir = std::fs::read_dir(root)?;
     let mut files = Vec::new();
 
