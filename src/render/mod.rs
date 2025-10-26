@@ -175,7 +175,7 @@ impl Plugin for RenderPlugin {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Deserialize, Copy, Clone)]
 pub enum Align {
     TopLeft,
     TopCenter,
