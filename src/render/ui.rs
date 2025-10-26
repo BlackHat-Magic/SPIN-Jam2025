@@ -46,6 +46,14 @@ pub struct UiNodes {
 }
 
 impl UiState {
+    pub fn show(&mut self, toggle_id: &str) {
+        self.toggles.remove(toggle_id);
+    }
+
+    pub fn hide(&mut self, toggle_id: &str) {
+        self.toggles.insert(toggle_id.to_string());
+    }
+
     fn load(gpu: &Gpu, images: &Images) -> (Self, UiNodes) {
         let mut font_db = fontdb::Database::new();
         let font_map = gather_dir("fonts", |path| {
@@ -64,10 +72,17 @@ impl UiState {
         let mut fonts = FontSystem::new_with_locale_and_db("US".to_string(), font_db);
 
         let nodes = gather_dir("ui", |path| {
-            let file = std::fs::read_to_string(path).ok()?;
-            serde_json::from_str::<SerializedUiNode>(&file).ok()
+            if path.extension().and_then(|s| s.to_str()) != Some("json") {
+                return None;
+            }
+            let file = std::fs::read_to_string(path).unwrap();
+            Some(serde_json::from_str::<SerializedUiNode>(&file).unwrap())
         })
         .unwrap();
+        let mut state = UiState {
+            toggles: HashSet::new(),
+        };
+
         let root = UiNode::from_serialized(
             nodes.get("root").unwrap(),
             &nodes,
@@ -75,14 +90,10 @@ impl UiState {
             &mut fonts,
             images,
             &font_map,
+            &mut state,
         );
 
-        (
-            UiState {
-                toggles: HashSet::new(),
-            },
-            UiNodes { root },
-        )
+        (state, UiNodes { root })
     }
 }
 
@@ -99,9 +110,9 @@ struct Rect {
 enum SerializedUiNode {
     Container {
         toggle_id: Option<String>,
-        rect: Rect,
         id: String,
         children: Vec<SerializedUiNode>,
+        on_by_default: Option<bool>,
     },
     Text {
         rect: Rect,
@@ -110,11 +121,13 @@ enum SerializedUiNode {
         color: Option<String>,
         font: String,
         size: f32,
+        align: Option<Align>,
     },
     Image {
         rect: Rect,
         id: String,
         image: String,
+        align: Option<Align>,
     },
     SubFile {
         file_path: String,
@@ -124,7 +137,6 @@ enum SerializedUiNode {
 enum UiNode {
     Container {
         toggle_id: Option<String>,
-        rect: Rect,
         id: String,
         children: Vec<UiNode>,
     },
@@ -132,11 +144,13 @@ enum UiNode {
         rect: Rect,
         text_displayable: TextDisplayable,
         id: String,
+        align: Align,
     },
     Image {
         rect: Rect,
         id: String,
-        image: super::sprite::Sprite,
+        image: Sprite,
+        align: Align,
     },
 }
 
@@ -148,22 +162,32 @@ impl UiNode {
         fonts: &mut FontSystem,
         images: &Images,
         font_map: &HashMap<String, ID>,
+        state: &mut UiState,
     ) -> Self {
         match node {
             SerializedUiNode::Container {
                 toggle_id,
-                rect,
                 id,
                 children,
-            } => Self::Container {
-                toggle_id: toggle_id.clone(),
-                rect: *rect,
-                id: id.clone(),
-                children: children
-                    .iter()
-                    .map(|node| UiNode::from_serialized(node, nodes, gpu, fonts, images, font_map))
-                    .collect(),
-            },
+                on_by_default,
+            } => {
+                if !on_by_default.unwrap_or(true) {
+                    debug_assert!(toggle_id.is_some());
+                    state.hide(toggle_id.as_ref().unwrap());
+                }
+                Self::Container {
+                    toggle_id: toggle_id.clone(),
+                    id: id.clone(),
+                    children: children
+                        .iter()
+                        .map(|node| {
+                            UiNode::from_serialized(
+                                node, nodes, gpu, fonts, images, font_map, state,
+                            )
+                        })
+                        .collect(),
+                }
+            }
             SerializedUiNode::Text {
                 rect,
                 id,
@@ -171,6 +195,7 @@ impl UiNode {
                 font,
                 color,
                 size,
+                align,
             } => {
                 let mut text_displayable = TextDisplayable::new(
                     content.clone(),
@@ -194,9 +219,15 @@ impl UiNode {
                     rect: *rect,
                     text_displayable,
                     id: id.clone(),
+                    align: align.unwrap_or(Align::TopLeft),
                 }
             }
-            SerializedUiNode::Image { rect, id, image } => Self::Image {
+            SerializedUiNode::Image {
+                rect,
+                id,
+                image,
+                align,
+            } => Self::Image {
                 rect: *rect,
                 id: id.clone(),
                 image: {
@@ -206,6 +237,7 @@ impl UiNode {
                     }
                     .build(gpu, images)
                 },
+                align: align.unwrap_or(Align::TopLeft),
             },
             SerializedUiNode::SubFile { file_path } => UiNode::from_serialized(
                 nodes.get(file_path).unwrap(),
@@ -214,6 +246,7 @@ impl UiNode {
                 fonts,
                 images,
                 font_map,
+                state,
             ),
         }
     }
@@ -222,7 +255,6 @@ impl UiNode {
         match self {
             UiNode::Container {
                 toggle_id,
-                rect: _,
                 id: _,
                 children,
             } => {
@@ -241,22 +273,28 @@ impl UiNode {
                 rect,
                 id: _,
                 text_displayable,
+                align,
             } => {
                 gpu.display(
                     text_displayable,
                     (rect.x, rect.y),
                     (rect.width, rect.height),
                     0.0,
-                    Align::TopLeft,
+                    *align,
                 );
             }
-            UiNode::Image { rect, id, image } => {
+            UiNode::Image {
+                rect,
+                id,
+                image,
+                align,
+            } => {
                 gpu.display(
                     image,
                     (rect.x, rect.y),
                     (rect.width, rect.height),
                     0.0,
-                    Align::TopLeft,
+                    *align,
                 );
             }
         }
