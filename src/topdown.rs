@@ -51,6 +51,7 @@ async fn main() {
             );
             self.app.add_plugin(plugins);
 
+            self.app.add_system(update_animations, SystemStage::Update);
             self.app.add_system(draw_sprites, SystemStage::Update);
             self.app.add_system(control_player, SystemStage::Update);
             self.app.add_system(init_scene, SystemStage::Init);
@@ -145,12 +146,17 @@ system! {
 
         // player
         let player = commands.spawn_entity();
-        commands.add_component(player, SpriteBuilder {
-            image_path: "rawr".to_string(),
-            w: 32,
-            h: 32,
-            ..Default::default()
-        }.build(gpu, images));
+        commands.add_component(player, Animation::from_spritesheet(
+            "arcanist".to_string(),
+            gpu,
+            images,
+            None,
+            24, 
+            24,
+            12.0,
+            true,
+            true,
+        ));
         commands.add_component(player, Transform {
             pos: Vec3::new(0.0, 0.0, 0.1),
             rot: Quat::look_to_rh(Vec3::Z, Vec3::Y),
@@ -186,6 +192,7 @@ system! {
     fn draw_sprites(
         gpu: res &mut Gpu,
         sprites: query (&Sprite, &Transform, &Rotation2D),
+        animations: query (&Animation, &Transform, &Rotation2D),
         player: query (&Transform, &Camera)
     ) {
         let Some(gpu) = gpu else {return;};
@@ -204,6 +211,15 @@ system! {
                 z_index,
                 Align::Center
             );
+        }
+
+        for (animation, transform, rotation) in animations {
+            let relative_x = transform.pos.x - player_transform.pos.x;
+            let relative_y = transform.pos.y - player_transform.pos.y;
+            let z_index = transform.pos.z;
+            let x_px = relative_x * 32.0 + 640.0;
+            let y_px = relative_y * 32.0 + 360.0;
+            gpu.display(animation, (x_px, y_px), (transform.scale.x, transform.scale.y), rotation.0, z_index, Align::Center);
         }
     }
 }
