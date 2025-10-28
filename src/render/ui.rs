@@ -280,6 +280,7 @@ impl UiNode {
                     (rect.x, rect.y),
                     (rect.width, rect.height),
                     0.0,
+                    0.0,
                     *align,
                 );
             }
@@ -293,6 +294,7 @@ impl UiNode {
                     image,
                     (rect.x, rect.y),
                     (rect.width, rect.height),
+                    0.0,
                     0.0,
                     *align,
                 );
