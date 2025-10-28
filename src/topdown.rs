@@ -139,7 +139,7 @@ system! {
         commands.add_component(background, Transform {
             pos: Vec3::new(0.0, 0.0, 0.0),
             rot: Quat::look_to_rh(Vec3::Z, Vec3::Y),
-            scale: Vec3::new(0.8855, 0.8855, 0.0),
+            scale: Vec3::new(1.771, 1.771, 0.0),
             ..Default::default()
         });
         commands.add_component(background, Rotation2D(0.0));
@@ -160,7 +160,7 @@ system! {
         commands.add_component(player, Transform {
             pos: Vec3::new(0.0, 0.0, 0.1),
             rot: Quat::look_to_rh(Vec3::Z, Vec3::Y),
-            scale: Vec3::new(1.0, 1.0, 0.0),
+            scale: Vec3::new(2.0, 2.0, 0.0),
             ..Default::default()
         });
         commands.add_component(player, Camera::new(
@@ -181,7 +181,7 @@ system! {
         commands.add_component(enemy, Transform {
             pos: Vec3::new(4.0, 4.0, 0.2),
             rot: Quat::look_to_rh(Vec3::Z, Vec3::Y),
-            scale: Vec3::new(1.0, 1.0, 0.0),
+            scale: Vec3::new(2.0, 2.0, 0.0),
             ..Default::default()
         });
         commands.add_component(enemy, Rotation2D(0.0));
