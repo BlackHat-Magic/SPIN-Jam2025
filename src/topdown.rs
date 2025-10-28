@@ -28,6 +28,7 @@ pub use spin::*;
 static UNIT_SIZE: f32 = 32.0;
 static SPRITE_SCALE: f32 = 2.0;
 static PLAYER_SPEED: f32 = 16.0;
+static ENEMY_SPEED: f32 = 12.0;
 static SCREEN_W: u32 = 1280;
 static SCREEN_H: u32 = 720;
 
@@ -279,6 +280,122 @@ system! {
 }
 
 system! {
+    fn process_ai(
+        time: res &Time
+        player: query (&mut Transform, &Camera)
+        enemies: query (&mut Transform, &mut Rotation2D, &mut Ai)
+        walls: query (&Walls)
+    ) {
+        let Some(time) = time else {return;};
+        let Some((player_transform, _camera)) = player.next() else {return;};
+        
+        for (enemy_transform, enemy_rotation, ai) in enemies {
+            let displacement = player_transform - enemy_transform;
+            let rotation_dir = Vec3::new(enemy_rotation.cos(), enemy_rotation.sin(), 0.0);
+            let dot = rotation_dir.dot(displacement);
+            match ai.state {
+                AIState::Idle => {
+                    // if player is very close, they don't need to be looking at them
+                    if displacement.length() < 1.5 {
+                        println!("Too close; sus");
+                        ai.state = AIState::Sus(2.0);
+                        return;
+                    }
+
+                    // if player is very far, they can't see them
+                    if displacement.length() > 6.0 {
+                        return;
+                    }
+
+                    // otherwise, use vision cone
+                    if dot < 0.0 {
+                        return;
+                    }
+                    if dot.arccos() > 1.0 {
+                        return; // ~60deg fov
+                    }
+
+                    // if view is occluded, they can't see
+                    // check this last because occlusion check is expensive
+                    for wall in walls.0.iter() {
+                        if ray_intersects_segment(
+                            enemy_transform.pos,
+                            rotation_dir,
+                            6.0,
+                            wall
+                        ) {
+                            return;
+                        }
+                    }
+
+                    println!("In vision cone; sus");
+                    ai.state = AIState::Sus(2.0);
+                }
+                AIState::Sus(countdown) => {
+                    // if the countdown ran out, set to noticed
+                    if countdown <= 0.0 {
+                        println!("Noticed")
+                        ai.state = AIState::Noticed(0.5);
+                        return;
+                    }
+
+                    // if player is far away, we're chill.
+                    if displacement.length() > 6 {
+                        println!("Too far");
+                        ai.state = AIState::Idle;
+                        ai.last_position = Vec3::ZERO;
+                        return;
+                    }
+
+                    // if view is occluded, they can't see
+                    for wall in walls.0.iter() {
+                        if ray_intersects_segment(
+                            enemy_transform.pos,
+                            rotation_dir,
+                            6.0,
+                            wall
+                        ) {
+                            println!("Occluded");
+                            ai.state = AIState::Idle;
+                            ai.last_position = Vec3::ZERO;
+                            return;
+                        }
+                    }
+
+                    // look at the player
+                    ai.last_position = player_transform.pos;
+                    enemy_rotation.0 = displacement.y.atan2(displacement.x);
+                    let dt = time.delta_seconds;
+                    if displacement.length() < 1.5 {
+                        dt *= 2.0; // deplete timer faster if player is very close
+                    }
+                    ai.state = AIState::Sus(countdown - dt);
+                }
+                AIState::Noticed(countdown) => {
+                    // if the countdown ran out, set to chase
+                    if countdown <= 0.0 {
+                        // TODO: What if we can't see?
+                        ai.state = AIState::Chase(true);
+                        return;
+                    }
+
+                    // look at the player
+                    // TODO: What if we can't see?
+                    ai.last_position = player_transform.pos;
+                    enemy_rotation.0 = displacement.y.atan2(displacement.x);
+                    ai.state = AIState::Noticed(countdown - time.delta_seconds);
+                }
+                AIState::Chase(can_see) => {
+                    let movement = displacement.normalize() * ENEMY_SPEED;
+                    enemy_rotation.0 = displacement.y.atan2(displacement.x);
+                    enemy_transform.pos += movement;
+                }
+            }
+        }
+    }
+}
+
+system! {
     fn draw_walls(
         gpu: res &mut Gpu,
         walls: query (&Walls, &Sprite),
@@ -341,7 +458,7 @@ system! {
             if ray_intersects_segment(
                 player_transform.pos,
                 movement,
-                PLAYER_SPEED / SPRITE_SCALE / UNIT_SIZE,
+                PLAYER_SPEED / SPRITE_SCALE / UNIT_SIZE + 0.5,
                 wall
             ) {
                 movement = Vec3::ZERO;

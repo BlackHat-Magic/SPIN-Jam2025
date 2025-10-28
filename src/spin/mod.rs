@@ -8,3 +8,16 @@ pub struct Wall {
 }
 #[derive(Component)]
 pub struct Walls (pub Vec<Wall>);
+
+pub enum AIState {
+    Idle,
+    Sus(f32),
+    Noticed(f32),
+    Chase(bool),
+    Search(f32)
+}
+#[derive(Component)]
+pub struct AI {
+    pub last_position: Vec3,
+    pub state: AIState,
+}
