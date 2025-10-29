@@ -228,29 +228,86 @@ system! {
         let walls = commands.spawn_entity();
         let mut walls_comp = Walls(Vec::new());
         walls_comp.0.push(Wall {
-            p1: Vec3::new(
-                -9.0 * SPRITE_SCALE,
-                -10.0 * SPRITE_SCALE,
-                0.0
-            ),
-            p2: Vec3::new(
-                -9.0 * SPRITE_SCALE,
-                2.0 * SPRITE_SCALE,
-                0.0
-            )
+            p1: Vec3::new(-9.0, -10.0, 0.0) * SPRITE_SCALE,
+            p2: Vec3::new(-9.0, 2.0, 0.0) * SPRITE_SCALE
         });
         walls_comp.0.push(Wall {
-            p1: Vec3::new(
-                -9.0 * SPRITE_SCALE,
-                -10.0 * SPRITE_SCALE,
-                0.0
-            ),
-            p2: Vec3::new(
-                9.0 * SPRITE_SCALE,
-                -10.0 * SPRITE_SCALE,
-                0.0
-            )
+            p1: Vec3::new(-9.0, -10.0, 0.0) * SPRITE_SCALE,
+            p2: Vec3::new(9.0, -10.0, 0.0) * SPRITE_SCALE
         });
+        walls_comp.0.push(Wall {
+            p1: Vec3::new(9.0, -10.0, 0.0) * SPRITE_SCALE,
+            p2: Vec3::new(9.0, 7.0, 0.0) * SPRITE_SCALE
+        });
+        walls_comp.0.push(Wall {
+            p1: Vec3::new(9.0, 7.0, 0.0) * SPRITE_SCALE,
+            p2: Vec3::new(2.0, 7.0, 0.0) * SPRITE_SCALE
+        });
+        walls_comp.0.push(Wall {
+            p1: Vec3::new(2.0, 7.0, 0.0) * SPRITE_SCALE,
+            p2: Vec3::new(2.0, 9.0, 0.0) * SPRITE_SCALE
+        });
+        walls_comp.0.push(Wall {
+            p1: Vec3::new(-2.0, 9.0, 0.0) * SPRITE_SCALE,
+            p2: Vec3::new(-2.0, 7.0, 0.0) * SPRITE_SCALE
+        });
+        walls_comp.0.push(Wall {
+            p1: Vec3::new(-2.0, 7.0, 0.0) * SPRITE_SCALE,
+            p2: Vec3::new(-9.0, 7.0, 0.0) * SPRITE_SCALE
+        });
+        walls_comp.0.push(Wall {
+            p1: Vec3::new(-9.0, 7.0, 0.0) * SPRITE_SCALE,
+            p2: Vec3::new(-9.0, 4.0, 0.0) * SPRITE_SCALE
+        });
+        walls_comp.0.push(Wall {
+            p1: Vec3::new(-9.0, -1.0, 0.0) * SPRITE_SCALE,
+            p2: Vec3::new(-7.0, -1.0, 0.0) * SPRITE_SCALE
+        });
+        walls_comp.0.push(Wall {
+            p1: Vec3::new(-5.0, -1.0, 0.0) * SPRITE_SCALE,
+            p2: Vec3::new(-1.0, -1.0, 0.0) * SPRITE_SCALE
+        });
+        walls_comp.0.push(Wall {
+            p1: Vec3::new(-4.0, -1.0, 0.0) * SPRITE_SCALE,
+            p2: Vec3::new(-4.0, 7.0, 0.0) * SPRITE_SCALE
+        });
+        walls_comp.0.push(Wall {
+            p1: Vec3::new(-2.0, -1.0, 0.0) * SPRITE_SCALE,
+            p2: Vec3::new(-2.0, -3.0, 0.0) * SPRITE_SCALE
+        });
+        walls_comp.0.push(Wall {
+            p1: Vec3::new(-2.0, -5.0, 0.0) * SPRITE_SCALE,
+            p2: Vec3::new(-2.0, -8.0, 0.0) * SPRITE_SCALE
+        });
+        walls_comp.0.push(Wall {
+            p1: Vec3::new(-2.0, -9.0, 0.0) * SPRITE_SCALE,
+            p2: Vec3::new(-2.0, -10.0, 0.0) * SPRITE_SCALE
+        });
+        walls_comp.0.push(Wall {
+            p1: Vec3::new(2.0, -1.0, 0.0) * SPRITE_SCALE,
+            p2: Vec3::new(2.0, -3.0, 0.0) * SPRITE_SCALE
+        });
+        walls_comp.0.push(Wall {
+            p1: Vec3::new(2.0, -5.0, 0.0) * SPRITE_SCALE,
+            p2: Vec3::new(2.0, -8.0, 0.0) * SPRITE_SCALE
+        });
+        walls_comp.0.push(Wall {
+            p1: Vec3::new(2.0, -9.0, 0.0) * SPRITE_SCALE,
+            p2: Vec3::new(2.0, -10.0, 0.0) * SPRITE_SCALE
+        });
+        walls_comp.0.push(Wall {
+            p1: Vec3::new(-2.0, -7.0, 0.0) * SPRITE_SCALE,
+            p2: Vec3::new(2.0, -7.0, 0.0) * SPRITE_SCALE
+        });
+        walls_comp.0.push(Wall {
+            p1: Vec3::new(1.0, -1.0, 0.0) * SPRITE_SCALE,
+            p2: Vec3::new(4.0, -1.0, 0.0) * SPRITE_SCALE
+        });
+        // TODO: why does this wall break everything?
+        // walls_comp.0.push(Wall {
+        //     p1: Vec3::new(4.0, -1.0, 0.0) * SPRITE_SCALE,
+        //     p2: Vec3::new(4.0, 7.0, 0.0) * SPRITE_SCALE
+        // });
         commands.add_component(walls, walls_comp);
         commands.add_component(walls, SpriteBuilder {
             image_path: "rawr".to_string(),
@@ -376,7 +433,7 @@ system! {
                         ) {
                             println!("Occluded");
                             ai.state = AIState::Idle;
-                            ai.last_position = Vec3::ZERO;
+                            // ai.last_position = Vec3::ZERO;
                             return;
                         }
                     }
@@ -495,7 +552,7 @@ system! {
             if ray_intersects_segment(
                 player_transform.pos,
                 movement,
-                PLAYER_SPEED * time.delta_seconds,
+                PLAYER_SPEED * time.delta_seconds * 8.0, // magic number 👻
                 wall
             ) {
                 movement = Vec3::ZERO;
