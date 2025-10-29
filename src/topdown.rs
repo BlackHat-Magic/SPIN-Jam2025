@@ -83,6 +83,7 @@ async fn main() {
             self.app.add_system(draw_sprites, SystemStage::Update);
             self.app.add_system(draw_walls, SystemStage::Update);
             self.app.add_system(control_player, SystemStage::Update);
+            self.app.add_system(process_ai, SystemStage::Update);
             self.app.add_system(init_scene, SystemStage::Init);
 
             self.app.init();
@@ -199,6 +200,7 @@ system! {
             100.0,
         ));
         commands.add_component(player, Rotation2D(3.14 / 4.0));
+        commands.insert_resource(PlayerPosition(Vec3::ZERO));
 
         let enemy = commands.spawn_entity();
         let enemy_sprite_size = 256.0;
@@ -216,6 +218,10 @@ system! {
             ..Default::default()
         });
         commands.add_component(enemy, Rotation2D(0.0));
+        commands.add_component(enemy, Ai {
+            last_position: Vec3::ZERO,
+            state: AIState::Idle,
+        });
 
         // walls container
         let walls = commands.spawn_entity();
@@ -281,20 +287,22 @@ system! {
 
 system! {
     fn process_ai(
-        time: res &Time
-        player: query (&mut Transform, &Camera)
-        enemies: query (&mut Transform, &mut Rotation2D, &mut Ai)
-        walls: query (&Walls)
+        time: res &Time,
+        player_pos: res &PlayerPosition,
+        enemies: query (&mut Transform, &mut Rotation2D, &mut Ai),
+        walls_comp: query (&Walls)
     ) {
         let Some(time) = time else {return;};
-        let Some((player_transform, _camera)) = player.next() else {return;};
+        let Some(player_pos) = player_pos else {return;};
+        let Some(walls_comp) = walls_comp.next() else {return;};
         
         for (enemy_transform, enemy_rotation, ai) in enemies {
-            let displacement = player_transform - enemy_transform;
-            let rotation_dir = Vec3::new(enemy_rotation.cos(), enemy_rotation.sin(), 0.0);
+            let displacement = player_pos.0 - enemy_transform.pos;
+            let rotation_dir = Vec3::new(enemy_rotation.0.cos(), enemy_rotation.0.sin(), 0.0);
             let dot = rotation_dir.dot(displacement);
             match ai.state {
                 AIState::Idle => {
+                    println!("idle");
                     // if player is very close, they don't need to be looking at them
                     if displacement.length() < 1.5 {
                         println!("Too close; sus");
@@ -311,13 +319,13 @@ system! {
                     if dot < 0.0 {
                         return;
                     }
-                    if dot.arccos() > 1.0 {
+                    if dot.acos() > 1.0 {
                         return; // ~60deg fov
                     }
 
                     // if view is occluded, they can't see
                     // check this last because occlusion check is expensive
-                    for wall in walls.0.iter() {
+                    for wall in walls_comp.0.iter() {
                         if ray_intersects_segment(
                             enemy_transform.pos,
                             rotation_dir,
@@ -332,15 +340,16 @@ system! {
                     ai.state = AIState::Sus(2.0);
                 }
                 AIState::Sus(countdown) => {
+                    println!("sus");
                     // if the countdown ran out, set to noticed
                     if countdown <= 0.0 {
-                        println!("Noticed")
+                        println!("Noticed");
                         ai.state = AIState::Noticed(0.5);
                         return;
                     }
 
                     // if player is far away, we're chill.
-                    if displacement.length() > 6 {
+                    if displacement.length() > 6.0 {
                         println!("Too far");
                         ai.state = AIState::Idle;
                         ai.last_position = Vec3::ZERO;
@@ -348,7 +357,7 @@ system! {
                     }
 
                     // if view is occluded, they can't see
-                    for wall in walls.0.iter() {
+                    for wall in walls_comp.0.iter() {
                         if ray_intersects_segment(
                             enemy_transform.pos,
                             rotation_dir,
@@ -363,15 +372,16 @@ system! {
                     }
 
                     // look at the player
-                    ai.last_position = player_transform.pos;
+                    ai.last_position = player_pos.0;
                     enemy_rotation.0 = displacement.y.atan2(displacement.x);
-                    let dt = time.delta_seconds;
+                    let mut dt = time.delta_seconds;
                     if displacement.length() < 1.5 {
                         dt *= 2.0; // deplete timer faster if player is very close
                     }
                     ai.state = AIState::Sus(countdown - dt);
                 }
                 AIState::Noticed(countdown) => {
+                    println!("noticed");
                     // if the countdown ran out, set to chase
                     if countdown <= 0.0 {
                         // TODO: What if we can't see?
@@ -381,14 +391,18 @@ system! {
 
                     // look at the player
                     // TODO: What if we can't see?
-                    ai.last_position = player_transform.pos;
+                    ai.last_position = player_pos.0;
                     enemy_rotation.0 = displacement.y.atan2(displacement.x);
                     ai.state = AIState::Noticed(countdown - time.delta_seconds);
                 }
                 AIState::Chase(can_see) => {
-                    let movement = displacement.normalize() * ENEMY_SPEED;
+                    println!("chase");
+                    let movement = displacement.normalize() * ENEMY_SPEED * time.delta_seconds;
                     enemy_rotation.0 = displacement.y.atan2(displacement.x);
                     enemy_transform.pos += movement;
+                }
+                AIState::Search(countdown) => {
+                    return;
                 }
             }
         }
@@ -398,18 +412,18 @@ system! {
 system! {
     fn draw_walls(
         gpu: res &mut Gpu,
+        player_pos: res &PlayerPosition,
         walls: query (&Walls, &Sprite),
-        player: query (&Transform, &Camera)
     ) {
         let Some(gpu) = gpu else {return;};
+        let Some(player_pos) = player_pos else {return;};
         let Some((walls_comp, walls_sprite)) = walls.next() else {return;};
-        let Some((player_transform, _camera)) = player.next() else {return;};
 
         for wall in walls_comp.0.iter() {
             let wall_dir = wall.p2 - wall.p1;
             let wall_ctr = wall.p1 + wall_dir / 2.0;
-            let ctr_rx = wall_ctr.x - player_transform.pos.x;
-            let ctr_ry = wall_ctr.y - player_transform.pos.y;
+            let ctr_rx = wall_ctr.x - player_pos.0.x;
+            let ctr_ry = wall_ctr.y - player_pos.0.y;
             let x_px = ctr_rx * UNIT_SIZE + SCREEN_W as f32 / 2.0;
             let y_px = ctr_ry * UNIT_SIZE + SCREEN_H as f32 / 2.0;
 
@@ -417,9 +431,7 @@ system! {
             let mut scale_y = 0.1;
             if wall_dir.x.abs() > wall_dir.y.abs() {
                 scale_x = wall_dir.x.abs();
-                scale_y = 0.1;
             } else {
-                scale_x = 0.1;
                 scale_y = wall_dir.y.abs();
             }
             gpu.display(walls_sprite,
@@ -437,11 +449,13 @@ system! {
     fn control_player(
         input: res &mut Input,
         time: res &Time,
+        mut player_pos: res &mut PlayerPosition,
         player: query (&mut Transform, &Camera, &mut Rotation2D),
         walls: query (&Walls),
     ) {
         let Some (input) = input else {return;};
         let Some (time) = time else {return;};
+        let Some(player_pos) = player_pos else {return;};
         let Some((player_transform, _camera, rotation)) = player.next() else {return;};
         let Some (walls_comp) = walls.next() else {return;};
 
@@ -475,5 +489,6 @@ system! {
         let to_mousex = mousex - SCREEN_W as f64 / 2.0;
         let to_mousey = mousey - SCREEN_H as f64 / 2.0;
         rotation.0 = to_mousey.atan2(to_mousex) as f32;
+        player_pos.0 = player_transform.pos;
     }
 }
