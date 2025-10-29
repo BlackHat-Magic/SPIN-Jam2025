@@ -33,7 +33,7 @@ pub struct Transform {
 }
 
 #[derive(Component)]
-pub struct Rotation2D (pub f32);
+pub struct Rotation2D(pub f32);
 
 impl Default for Transform {
     fn default() -> Self {

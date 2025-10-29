@@ -13,31 +13,32 @@ pub use networking::*;
 
 pub mod physics;
 pub mod render;
-pub mod utils;
 pub mod spin;
+pub mod utils;
 
 pub use physics::*;
 pub use render::model::ModelHandle;
 use render::sprite::*;
 pub use render::*;
+pub use spin::*;
 use utils::input::Input;
 pub use utils::time::*;
 pub use utils::*;
-pub use spin::*;
 
 static UNIT_SIZE: f32 = 32.0;
 static SPRITE_SCALE: f32 = 2.0;
 static PLAYER_SPEED: f32 = 16.0;
-static ENEMY_SPEED: f32 = 12.0;
 static SCREEN_W: u32 = 1280;
 static SCREEN_H: u32 = 720;
 
-fn ray_intersects_segment(
-    ray_origin: Vec3,
-    ray_dir: Vec3,
-    ray_len: f32,
-    wall: &Wall,
-) -> bool {
+static ENEMY_SPEED: f32 = 12.0;
+static ENEMY_PERSONAL_SPACE: f32 = 2.0;
+static ENEMY_VISION_DIST: f32 = 10.0;
+static ENEMY_SUS_TIMER: f32 = 2.0;
+static ENEMY_VISION_RADIANS: f32 = 1.0;
+static ENEMY_SURPRISE_TIMER: f32 = 0.5;
+
+fn ray_intersects_segment(ray_origin: Vec3, ray_dir: Vec3, ray_len: f32, wall: &Wall) -> bool {
     let wall_dir = wall.p2 - wall.p1;
     let denom = ray_dir.x * wall_dir.y - wall_dir.y * wall_dir.x;
     if denom.abs() < f32::EPSILON {
@@ -295,23 +296,22 @@ system! {
         let Some(time) = time else {return;};
         let Some(player_pos) = player_pos else {return;};
         let Some(walls_comp) = walls_comp.next() else {return;};
-        
+
         for (enemy_transform, enemy_rotation, ai) in enemies {
             let displacement = player_pos.0 - enemy_transform.pos;
             let rotation_dir = Vec3::new(enemy_rotation.0.cos(), enemy_rotation.0.sin(), 0.0);
             let dot = rotation_dir.dot(displacement);
             match ai.state {
                 AIState::Idle => {
-                    println!("idle");
                     // if player is very close, they don't need to be looking at them
-                    if displacement.length() < 1.5 {
+                    if displacement.length() < ENEMY_PERSONAL_SPACE {
                         println!("Too close; sus");
-                        ai.state = AIState::Sus(2.0);
+                        ai.state = AIState::Sus(ENEMY_SUS_TIMER);
                         return;
                     }
 
                     // if player is very far, they can't see them
-                    if displacement.length() > 6.0 {
+                    if displacement.length() > ENEMY_VISION_DIST {
                         return;
                     }
 
@@ -319,7 +319,7 @@ system! {
                     if dot < 0.0 {
                         return;
                     }
-                    if dot.acos() > 1.0 {
+                    if dot.acos() > ENEMY_VISION_RADIANS {
                         return; // ~60deg fov
                     }
 
@@ -329,7 +329,7 @@ system! {
                         if ray_intersects_segment(
                             enemy_transform.pos,
                             rotation_dir,
-                            6.0,
+                            ENEMY_VISION_DIST,
                             wall
                         ) {
                             return;
@@ -337,19 +337,18 @@ system! {
                     }
 
                     println!("In vision cone; sus");
-                    ai.state = AIState::Sus(2.0);
+                    ai.state = AIState::Sus(ENEMY_SUS_TIMER);
                 }
                 AIState::Sus(countdown) => {
-                    println!("sus");
                     // if the countdown ran out, set to noticed
                     if countdown <= 0.0 {
                         println!("Noticed");
-                        ai.state = AIState::Noticed(0.5);
+                        ai.state = AIState::Noticed(ENEMY_SURPRISE_TIMER);
                         return;
                     }
 
                     // if player is far away, we're chill.
-                    if displacement.length() > 6.0 {
+                    if displacement.length() > ENEMY_VISION_DIST {
                         println!("Too far");
                         ai.state = AIState::Idle;
                         ai.last_position = Vec3::ZERO;
@@ -361,7 +360,7 @@ system! {
                         if ray_intersects_segment(
                             enemy_transform.pos,
                             rotation_dir,
-                            6.0,
+                            ENEMY_VISION_DIST,
                             wall
                         ) {
                             println!("Occluded");
@@ -375,28 +374,41 @@ system! {
                     ai.last_position = player_pos.0;
                     enemy_rotation.0 = displacement.y.atan2(displacement.x);
                     let mut dt = time.delta_seconds;
-                    if displacement.length() < 1.5 {
+                    if displacement.length() < ENEMY_PERSONAL_SPACE {
                         dt *= 2.0; // deplete timer faster if player is very close
                     }
                     ai.state = AIState::Sus(countdown - dt);
                 }
                 AIState::Noticed(countdown) => {
-                    println!("noticed");
+                    let mut can_see = true;
+                    for wall in walls_comp.0.iter() {
+                        if ray_intersects_segment(
+                            enemy_transform.pos,
+                            rotation_dir,
+                            ENEMY_VISION_DIST,
+                            wall
+                        ) {
+                            println!("Occluded");
+                            ai.state = AIState::Idle;
+                            ai.last_position = Vec3::ZERO;
+                            can_see = false;
+                        }
+                    }
+
                     // if the countdown ran out, set to chase
                     if countdown <= 0.0 {
-                        // TODO: What if we can't see?
-                        ai.state = AIState::Chase(true);
+                        ai.state = AIState::Chase(can_see);
                         return;
                     }
 
                     // look at the player
-                    // TODO: What if we can't see?
-                    ai.last_position = player_pos.0;
-                    enemy_rotation.0 = displacement.y.atan2(displacement.x);
+                    if (can_see) {
+                        ai.last_position = player_pos.0;
+                    }
+                    enemy_rotation.0 = ai.last_position.y.atan2(ai.last_position.x);
                     ai.state = AIState::Noticed(countdown - time.delta_seconds);
                 }
                 AIState::Chase(can_see) => {
-                    println!("chase");
                     let movement = displacement.normalize() * ENEMY_SPEED * time.delta_seconds;
                     enemy_rotation.0 = displacement.y.atan2(displacement.x);
                     enemy_transform.pos += movement;
@@ -466,7 +478,7 @@ system! {
         if input.is_key_pressed(winit::keyboard::KeyCode::KeyA) {movement -= Vec3::X;}
         if input.is_key_pressed(winit::keyboard::KeyCode::KeyD) {movement += Vec3::X;}
         movement = movement.normalize();
-        
+
         // ray intersection
         for wall in walls_comp.0.iter() {
             if ray_intersects_segment(

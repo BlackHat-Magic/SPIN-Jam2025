@@ -1,5 +1,5 @@
 use crate::*;
-use glam::{Vec3};
+use glam::Vec3;
 
 #[derive(Resource)]
 pub struct PlayerPosition(pub Vec3);
@@ -9,14 +9,14 @@ pub struct Wall {
     pub p2: Vec3,
 }
 #[derive(Component)]
-pub struct Walls (pub Vec<Wall>);
+pub struct Walls(pub Vec<Wall>);
 
 pub enum AIState {
     Idle,
     Sus(f32),
     Noticed(f32),
     Chase(bool),
-    Search(f32)
+    Search(f32),
 }
 #[derive(Component)]
 pub struct Ai {
