@@ -40,7 +40,7 @@ static ENEMY_SURPRISE_TIMER: f32 = 0.5;
 
 fn ray_intersects_segment(ray_origin: Vec3, ray_dir: Vec3, ray_len: f32, wall: &Wall) -> bool {
     let wall_dir = wall.p2 - wall.p1;
-    let denom = ray_dir.x * wall_dir.y - wall_dir.y * wall_dir.x;
+    let denom = ray_dir.x * wall_dir.y - ray_dir.y * wall_dir.x;
     if denom.abs() < f32::EPSILON {
         return false;
     }
@@ -227,7 +227,7 @@ system! {
         // walls container
         let walls = commands.spawn_entity();
         let mut walls_comp = Walls(Vec::new());
-        let wall1 = Wall {
+        walls_comp.0.push(Wall {
             p1: Vec3::new(
                 -9.0 * SPRITE_SCALE,
                 -10.0 * SPRITE_SCALE,
@@ -238,8 +238,19 @@ system! {
                 2.0 * SPRITE_SCALE,
                 0.0
             )
-        };
-        walls_comp.0.push(wall1);
+        });
+        walls_comp.0.push(Wall {
+            p1: Vec3::new(
+                -9.0 * SPRITE_SCALE,
+                -10.0 * SPRITE_SCALE,
+                0.0
+            ),
+            p2: Vec3::new(
+                9.0 * SPRITE_SCALE,
+                -10.0 * SPRITE_SCALE,
+                0.0
+            )
+        });
         commands.add_component(walls, walls_comp);
         commands.add_component(walls, SpriteBuilder {
             image_path: "rawr".to_string(),
@@ -484,7 +495,7 @@ system! {
             if ray_intersects_segment(
                 player_transform.pos,
                 movement,
-                PLAYER_SPEED / SPRITE_SCALE / UNIT_SIZE + 0.5,
+                PLAYER_SPEED * time.delta_seconds,
                 wall
             ) {
                 movement = Vec3::ZERO;
