@@ -1,12 +1,6 @@
 use std::sync::Arc;
 
 use glam::*;
-use winit::{
-    application::ApplicationHandler,
-    event::WindowEvent,
-    event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
-    window::{Window, WindowId},
-};
 
 pub use ecs::*;
 pub use networking::*;
@@ -19,14 +13,13 @@ pub use physics::*;
 pub use render::model::ModelHandle;
 use render::sprite::*;
 pub use render::*;
-use utils::input::Input;
 // pub use utils::time::*;
 pub use utils::*;
 
 //Brandon's Enemy AI
 pub use rand::prelude::*;
 // pub use utils::time;
-use std::time::{Instant, Duration};
+use std::time::{Duration};
 use std::thread;
 
 //within a system
@@ -35,12 +28,14 @@ use std::thread;
 
 #[derive(Component)]
 #[derive(Debug)]
+#[derive(Copy, Clone)]
 #[derive(PartialEq)]
 pub enum Direction {
     Up,
     Down,
     Left,
     Right,
+    None,
 }
 
 #[derive(PartialEq)]
@@ -55,7 +50,7 @@ pub struct StateMachine {
     pub pos: Vec3,
     pub scale: Vec3,
     pub direction: Direction, //directional facing
-    // pub facings: {Direction}, //This shoud limit the facing to only one, two
+    pub facings: Vec<Direction>, //This shoud limit the facing to only one, two
     pub movement: Movement, //Indicates what kind of movement they are able to
     pub mobility: Vec<Direction>,
     pub boundaries: Vec2,
@@ -76,8 +71,9 @@ impl Default for StateMachine {
                 y: 1.0,
                 z: 1.0,
             },
-            direction: Direction::Up,
-            movement: Movement::Both,
+            direction: Direction::None,
+            facings: Vec::new(),
+            movement: Movement::Idle,
             mobility: Vec::new(),
             boundaries: Vec2 {
                 x: 0.0,
@@ -100,22 +96,9 @@ impl StateMachine {
 
     pub fn direction_change(&mut self) {
         let mut rng = rand::rng();
-        let value = rng.random_range(0..4);
-        if value == 0 {
-            self.direction = Direction::Up;
-        }
-        if value == 1 {
-            self.direction = Direction::Down;
-        }
-        if value == 2 {
-            self.direction = Direction::Left;
-        }
-        if value == 3 {
-            self.direction = Direction::Right;
-        }
-        if value > 3 {
-            self.direction = Direction::Up;
-        }
+        let len = self.facings.len();
+        let value = rng.random_range(0..len);
+        self.direction = self.facings[value];
         println!("Direction the enemy is currently facing: {:?}", self.direction);
     }
 
@@ -124,23 +107,23 @@ impl StateMachine {
         let len = self.mobility.len();
         let value = rng.random_range(0..len);
         if self.mobility[value] == Direction::Up {
-            if (self.start.y + 1) <= self.boundaries.y {
-
+            if (self.start.y + 1.0).abs() <= self.boundaries.y {
+                self.start.y += 1.0;
             }
         }
         else if self.mobility[value] == Direction::Down {
-            if (self.start.y - 1) <= self.boundaries.y {
-
+            if (self.start.y - 1.0).abs() <= self.boundaries.y {
+                self.start.y -= -1.0;
             }
         }
         else if self.mobility[value] == Direction::Left {
-            if (self.start.x - 1) <= self.boundaries.x {
-
+            if (self.start.x - 1.0).abs() <= self.boundaries.x {
+                self.start.x -= 1.0;
             }
         }
         else if self.mobility[value] == Direction::Right {
-            if (self.start.x + 1) <= self.boundaries.x {
-
+            if (self.start.x + 1.0).abs() <= self.boundaries.x {
+                self.start.x += 1.0;
             }
         }
     }
@@ -182,7 +165,7 @@ fn main() {
     let idle = Movement::Idle;
     let directional = Movement::Directional;
     let walking = Movement::Walking;
-    if (enemy_ai.movement != idle){
+    if enemy_ai.movement != idle {
         loop {
             if rng.random_range(0..2) == 0 { //Directional opportunity
                 if both == enemy_ai.movement || directional == enemy_ai.movement {
