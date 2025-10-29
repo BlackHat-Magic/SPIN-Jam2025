@@ -1,5 +1,6 @@
 pub mod model;
 pub mod sprite;
+pub mod ui;
 
 use crate::*;
 
@@ -174,7 +175,7 @@ impl Plugin for RenderPlugin {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Deserialize, Copy, Clone)]
 pub enum Align {
     TopLeft,
     TopCenter,
@@ -200,6 +201,7 @@ impl Displayable for Box<dyn Displayable> {
 pub struct Quad {
     pub texture: Rc<wgpu::Texture>,
     pub rect: (f32, f32, f32, f32), // x, y, width, height
+    pub rot: f32,
     pub depth: f32,
 }
 
@@ -232,7 +234,7 @@ impl Shaders {
             let file_extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
 
             let shader = match file_extension {
-                #[cfg(debug_assertions)]
+                //#[cfg(debug_assertions)]
                 "wgsl" => gpu
                     .device
                     .create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -243,7 +245,7 @@ impl Shaders {
                                 .into(),
                         ),
                     }),
-                #[cfg(not(debug_assertions))]
+                /*#[cfg(not(debug_assertions))]
                 "spv" => {
                     let shader_data: Vec<u8> =
                         std::fs::read(&path).expect("Failed to read shader file");
@@ -254,7 +256,7 @@ impl Shaders {
                             label: path.to_str(),
                             source,
                         })
-                }
+                }*/
                 _ => {
                     println!(
                         "Warning: Unsupported shader file extension: .{} at {:?}",
@@ -646,6 +648,7 @@ impl Gpu {
         item: &dyn Displayable,
         location: (f32, f32),
         scale: (f32, f32),
+        rot: f32,
         depth: f32,
         align: Align,
     ) {
@@ -669,6 +672,7 @@ impl Gpu {
         let quad = Quad {
             texture: Rc::new(texture.clone()),
             rect,
+            rot,
             depth,
         };
         self.insert_quad(quad);
@@ -761,7 +765,6 @@ system!(
                     label: None,
                     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                         view: &texture_view,
-                        depth_slice: None,
                         resolve_target: None,
                         ops: wgpu::Operations {
                             load: wgpu::LoadOp::Clear(wgpu::Color {
@@ -909,7 +912,6 @@ system!(
                     label: None,
                     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                         view: &texture_view,
-                        depth_slice: None,
                         resolve_target: None,
                         ops: wgpu::Operations {
                             load: wgpu::LoadOp::Load,
@@ -959,19 +961,45 @@ system!(
 
                     let w = gpu.size.width as f32;
                     let h = gpu.size.height as f32;
-                    let x = quad.rect.0 / w * 2.0 - 1.0;
-                    let y = 1.0 - quad.rect.1 / h * 2.0;
-                    let x2 = (quad.rect.0 + quad.rect.2) / w * 2.0 - 1.0;
-                    let y2 = 1.0 - (quad.rect.1 + quad.rect.3) / h * 2.0;
+
+                    let hw = quad.rect.2 / 2.0;
+                    let hh = quad.rect.3 / 2.0;
+                    let cx = quad.rect.0 + hw;
+                    let cy = quad.rect.1 + hh;
+
+                    let theta = quad.rot;
+                    let cos_t = theta.cos();
+                    let sin_t = theta.sin();
+
+                    // Rotate each corner offset
+                    let tl_x = -hw * cos_t - (-hh) * sin_t;
+                    let tl_y = -hw * sin_t + (-hh) * cos_t;
+                    let tr_x = hw * cos_t - (-hh) * sin_t;
+                    let tr_y = hw * sin_t + (-hh) * cos_t;
+                    let br_x = hw * cos_t - hh * sin_t;
+                    let br_y = hw * sin_t + hh * cos_t;
+                    let bl_x = -hw * cos_t - hh * sin_t;
+                    let bl_y = -hw * sin_t + hh * cos_t;
+
+                    // Convert to NDC
+                    let tlx_ndc = ((cx + tl_x) / w * 2.0) - 1.0;
+                    let tly_ndc = 1.0 - (cy + tl_y) / h * 2.0;
+                    let trx_ndc = ((cx + tr_x) / w * 2.0) - 1.0;
+                    let try_ndc = 1.0 - (cy + tr_y) / h * 2.0;
+                    let brx_ndc = ((cx + br_x) / w * 2.0) - 1.0;
+                    let bry_ndc = 1.0 - (cy + br_y) / h * 2.0;
+                    let blx_ndc = ((cx + bl_x) / w * 2.0) - 1.0;
+                    let bly_ndc = 1.0 - (cy + bl_y) / h * 2.0;
+
                     let buffer = gpu
                         .device
                         .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                             label: Some("Quad Vertex Buffer"),
                             contents: bytemuck::cast_slice(&[
-                                x, y, quad.depth, 0.0, 0.0,
-                                x2, y, quad.depth, 1.0, 0.0,
-                                x2, y2, quad.depth, 1.0, 1.0,
-                                x, y2, quad.depth, 0.0, 1.0,
+                                tlx_ndc, tly_ndc, quad.depth, 0.0, 0.0,
+                                trx_ndc, try_ndc, quad.depth, 1.0, 0.0,
+                                brx_ndc, bry_ndc, quad.depth, 1.0, 1.0,
+                                blx_ndc, bly_ndc, quad.depth, 0.0, 1.0,
                             ]),
                             usage: wgpu::BufferUsages::VERTEX,
                         });

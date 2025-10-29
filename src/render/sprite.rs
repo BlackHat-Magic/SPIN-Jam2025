@@ -75,8 +75,8 @@ impl PalleteSwap {
 
 #[derive(Component)]
 pub struct Sprite {
-    pub h: u8,
-    pub w: u8,
+    pub h: u32,
+    pub w: u32,
     pub tex: Texture,
 }
 
@@ -85,8 +85,8 @@ impl Displayable for Sprite {
         (
             &self.tex,
             Extent3d {
-                width: self.w as u32,
-                height: self.h as u32,
+                width: self.w,
+                height: self.h,
                 depth_or_array_layers: 1,
             },
         )
@@ -94,10 +94,10 @@ impl Displayable for Sprite {
 }
 
 pub struct SpriteBuilder {
-    pub h: u8,
-    pub w: u8,
-    pub x: u8,
-    pub y: u8,
+    pub h: u32,
+    pub w: u32,
+    pub x: u32,
+    pub y: u32,
 
     pub image_path: String,
     pub pallete_swap: Option<PalleteSwap>,
@@ -106,8 +106,8 @@ pub struct SpriteBuilder {
 impl Default for SpriteBuilder {
     fn default() -> Self {
         Self {
-            h: 32,
-            w: 32,
+            h: 0,
+            w: 0,
             x: 0,
             y: 0,
 
@@ -123,27 +123,24 @@ impl SpriteBuilder {
             .images
             .get(&self.image_path)
             .expect("Failed to load image");
-        let img = img.clone();
-        let mut img = image::imageops::crop_imm(
-            &img,
-            self.x as u32,
-            self.y as u32,
-            self.w as u32,
-            self.h as u32,
-        )
-        .to_image();
-
+        let mut img = img.clone();
+        if self.w != 0 && self.h != 0 {
+            img = image::imageops::crop_imm(&img, self.x, self.y, self.w, self.h).to_image();
+        }
         if let Some(pallete_swap) = &self.pallete_swap {
             pallete_swap.apply(&mut img);
         }
 
+        let w = img.width();
+        let h = img.height();
+
         let size = wgpu::Extent3d {
-            width: self.w as u32,
-            height: self.h as u32,
+            width: w,
+            height: h,
             depth_or_array_layers: 1,
         };
 
-        let texture = gpu.device.create_texture(&wgpu::TextureDescriptor {
+        let tex = gpu.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Sprite Texture"),
             size,
             mip_level_count: 1,
@@ -158,29 +155,21 @@ impl SpriteBuilder {
 
         gpu.queue.write_texture(
             TexelCopyTextureInfo {
-                texture: &texture,
+                texture: &tex,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            &img.into_raw().as_slice(),
+            img.into_raw().as_slice(),
             TexelCopyBufferLayout {
                 offset: 0,
-                bytes_per_row: Some(4 * (self.w as u32)),
-                rows_per_image: Some(self.h as u32),
+                bytes_per_row: Some(4 * w),
+                rows_per_image: Some(h),
             },
-            Extent3d {
-                width: self.w as u32,
-                height: self.h as u32,
-                depth_or_array_layers: 1,
-            },
+            size,
         );
 
-        Sprite {
-            h: self.h,
-            w: self.w,
-            tex: texture,
-        }
+        Sprite { h, w, tex }
     }
 }
 
@@ -218,8 +207,8 @@ impl Animation {
         gpu: &Gpu,
         images: &Images,
         pallete_swap: Option<PalleteSwap>,
-        frame_w: u8,
-        frame_h: u8,
+        frame_w: u32,
+        frame_h: u32,
         speed: f32,
         looping: bool,
         running: bool,
@@ -230,8 +219,8 @@ impl Animation {
             .expect("Failed to load spritesheet");
 
         let (sheet_w, sheet_h) = img.dimensions();
-        let cols = sheet_w / frame_w as u32;
-        let rows = sheet_h / frame_h as u32;
+        let cols = sheet_w / frame_w;
+        let rows = sheet_h / frame_h;
 
         let mut frames = Vec::new();
         for y in 0..rows {
@@ -239,8 +228,8 @@ impl Animation {
                 let sprite = SpriteBuilder {
                     h: frame_h,
                     w: frame_w,
-                    x: (x * frame_w as u32) as u8,
-                    y: (y * frame_h as u32) as u8,
+                    x: x * frame_w,
+                    y: y * frame_h,
                     image_path: path.clone(),
                     pallete_swap: pallete_swap.clone(),
                 }
