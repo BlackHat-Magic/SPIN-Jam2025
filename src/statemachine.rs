@@ -35,6 +35,7 @@ use std::thread;
 
 #[derive(Component)]
 #[derive(Debug)]
+#[derive(PartialEq)]
 pub enum Direction {
     Up,
     Down,
@@ -56,7 +57,9 @@ pub struct StateMachine {
     pub direction: Direction, //directional facing
     // pub facings: {Direction}, //This shoud limit the facing to only one, two
     pub movement: Movement, //Indicates what kind of movement they are able to
-    
+    pub mobility: Vec<Direction>,
+    pub boundaries: Vec2,
+    pub start: Vec2,
 }
 
 //TODO:
@@ -75,6 +78,15 @@ impl Default for StateMachine {
             },
             direction: Direction::Up,
             movement: Movement::Both,
+            mobility: Vec::new(),
+            boundaries: Vec2 {
+                x: 0.0,
+                y: 0.0,
+            },
+            start: Vec2 {
+                x: 0.0,
+                y: 0.0,
+            },
         }
     }
 }
@@ -85,6 +97,7 @@ impl StateMachine {
     //
     //Possible enhancements:
     //More than just a 4-way directional movement, could be 8-directions
+
     pub fn direction_change(&mut self) {
         let mut rng = rand::rng();
         let value = rng.random_range(0..4);
@@ -104,6 +117,32 @@ impl StateMachine {
             self.direction = Direction::Up;
         }
         println!("Direction the enemy is currently facing: {:?}", self.direction);
+    }
+
+    pub fn movement_chance(&mut self) {
+        let mut rng = rand::rng();
+        let len = self.mobility.len();
+        let value = rng.random_range(0..len);
+        if self.mobility[value] == Direction::Up {
+            if (self.start.y + 1) <= self.boundaries.y {
+
+            }
+        }
+        else if self.mobility[value] == Direction::Down {
+            if (self.start.y - 1) <= self.boundaries.y {
+
+            }
+        }
+        else if self.mobility[value] == Direction::Left {
+            if (self.start.x - 1) <= self.boundaries.x {
+
+            }
+        }
+        else if self.mobility[value] == Direction::Right {
+            if (self.start.x + 1) <= self.boundaries.x {
+
+            }
+        }
     }
 
     //Sort of like a FNAF movement opportunity kind of deal
@@ -143,16 +182,18 @@ fn main() {
     let idle = Movement::Idle;
     let directional = Movement::Directional;
     let walking = Movement::Walking;
-    loop {
-        if rng.random_range(0..2) == 0 { //Direction
-            if both == enemy_ai.movement || directional == enemy_ai.movement {
-                enemy_ai.enemy_direction_opportunity();
+    if (enemy_ai.movement != idle){
+        loop {
+            if rng.random_range(0..2) == 0 { //Directional opportunity
+                if both == enemy_ai.movement || directional == enemy_ai.movement {
+                    enemy_ai.enemy_direction_opportunity();
+                }
+            } else { //Movement opportunity
+                if both == enemy_ai.movement || walking == enemy_ai.movement {
+                    enemy_ai.enemy_movement_opportunity();
+                }
             }
-        } else { //Movement
-            if both == enemy_ai.movement || walking == enemy_ai.movement {
-                enemy_ai.enemy_movement_opportunity();
-            }
+            thread::sleep(Duration::from_secs(2));
         }
-        thread::sleep(Duration::from_secs(2));
     }
 }
