@@ -5,17 +5,6 @@ use glam::*;
 pub use ecs::*;
 pub use networking::*;
 
-pub mod physics;
-pub mod render;
-pub mod utils;
-
-pub use physics::*;
-pub use render::model::ModelHandle;
-use render::sprite::*;
-pub use render::*;
-// pub use utils::time::*;
-pub use utils::*;
-
 //Brandon's Enemy AI
 pub use rand::prelude::*;
 // pub use utils::time;
@@ -39,6 +28,7 @@ pub enum Direction {
 }
 
 #[derive(PartialEq)]
+#[derive(Debug)]
 pub enum Movement {
     Idle,
     Directional,
@@ -46,8 +36,8 @@ pub enum Movement {
     Both,
 }
 
+#[derive(Component)] 
 pub struct StateMachine {
-    pub pos: Vec3,
     pub scale: Vec3,
     pub direction: Direction, //directional facing
     pub facings: Vec<Direction>, //This shoud limit the facing to only one, two
@@ -65,16 +55,15 @@ pub struct StateMachine {
 impl Default for StateMachine {
     fn default() -> Self {
         Self {
-            pos: Vec3::ZERO,
             scale: Vec3 {
                 x: 1.0,
                 y: 1.0,
                 z: 1.0,
             },
             direction: Direction::None,
-            facings: Vec::new(),
+            facings: Vec::<Direction>::new(),
             movement: Movement::Idle,
-            mobility: Vec::new(),
+            mobility: Vec::<Direction>::new(),
             boundaries: Vec2 {
                 x: 0.0,
                 y: 0.0,

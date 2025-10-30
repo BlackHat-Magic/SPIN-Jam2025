@@ -25,6 +25,10 @@ pub use utils::*;
 
 //Brandon's Enemy AI
 pub mod statemachine;
+pub use crate::statemachine::StateMachine;
+pub use crate::statemachine::Direction;
+pub use crate::statemachine::Movement;
+
 
 #[tokio::main]
 async fn main() {
@@ -189,7 +193,25 @@ system! {
         });
         commands.add_component(enemy, Rotation2D(0.0));
         //TODO: Implement enemy ai into here since I coded the basic movement and all.
-        
+        commands.add_component(enemy, StateMachine {
+            scale: Vec3{
+                x: 1.0,
+                y: 1.0,
+                z: 1.0,
+            },
+            direction: Direction::Up,
+            facings: vec![Direction::Up, Direction::Down, Direction::Left, Direction::Right],
+            movement: Movement::Both,
+            mobility: vec![Direction::Up, Direction::Down, Direction::Left, Direction::Right],
+            boundaries: Vec2 {
+                x: 0.0,
+                y: 0.0,
+            },
+            start: Vec2 {
+                x: 4.0,
+                y: 4.0,
+            },
+        });
     }
 }
 
