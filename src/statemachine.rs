@@ -156,11 +156,10 @@ impl StateMachine {
     }
 }
 
+
 fn main() {
     let mut enemy_ai = StateMachine::default();
     let mut rng = rand::rng();
-    //Loops for every 2 seconds. This probably isn't the most efficient.
-    //I had tried other ideas in previous pushes.
     let both = Movement::Both;
     let idle = Movement::Idle;
     let directional = Movement::Directional;

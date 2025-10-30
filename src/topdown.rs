@@ -24,7 +24,7 @@ pub use utils::time::*;
 pub use utils::*;
 
 //Brandon's Enemy AI
-use rand::prelude::*;
+pub mod statemachine;
 
 #[tokio::main]
 async fn main() {
@@ -188,6 +188,8 @@ system! {
             ..Default::default()
         });
         commands.add_component(enemy, Rotation2D(0.0));
+        //TODO: Implement enemy ai into here since I coded the basic movement and all.
+        
     }
 }
 
