@@ -146,25 +146,25 @@ impl StateMachine {
 }
 
 
-fn main() {
-    let mut enemy_ai = StateMachine::default();
-    let mut rng = rand::rng();
-    let both = Movement::Both;
-    let idle = Movement::Idle;
-    let directional = Movement::Directional;
-    let walking = Movement::Walking;
-    if enemy_ai.movement != idle {
-        loop {
-            if rng.random_range(0..2) == 0 { //Directional opportunity
-                if both == enemy_ai.movement || directional == enemy_ai.movement {
-                    enemy_ai.enemy_direction_opportunity();
-                }
-            } else { //Movement opportunity
-                if both == enemy_ai.movement || walking == enemy_ai.movement {
-                    enemy_ai.enemy_movement_opportunity();
-                }
-            }
-            thread::sleep(Duration::from_secs(2));
-        }
-    }
-}
+// fn main() {
+//     let mut enemy_ai = StateMachine::default();
+//     let mut rng = rand::rng();
+//     let both = Movement::Both;
+//     let idle = Movement::Idle;
+//     let directional = Movement::Directional;
+//     let walking = Movement::Walking;
+//     if enemy_ai.movement != idle {
+//         loop {
+//             if rng.random_range(0..2) == 0 { //Directional opportunity
+//                 if both == enemy_ai.movement || directional == enemy_ai.movement {
+//                     enemy_ai.enemy_direction_opportunity();
+//                 }
+//             } else { //Movement opportunity
+//                 if both == enemy_ai.movement || walking == enemy_ai.movement {
+//                     enemy_ai.enemy_movement_opportunity();
+//                 }
+//             }
+//             thread::sleep(Duration::from_secs(2));
+//         }
+//     }
+// }

@@ -28,7 +28,9 @@ pub mod statemachine;
 pub use crate::statemachine::StateMachine;
 pub use crate::statemachine::Direction;
 pub use crate::statemachine::Movement;
-
+use std::thread;
+use tokio::time::Duration;
+pub use rand::prelude::*;
 
 #[tokio::main]
 async fn main() {
@@ -180,7 +182,7 @@ system! {
 
         let enemy = commands.spawn_entity();
         commands.add_component(enemy, SpriteBuilder {
-            image_path: "rawr".to_string(),
+            image_path: "arcanist".to_string(),
             w: 32,
             h: 32,
             ..Default::default()
@@ -247,6 +249,33 @@ system! {
             let x_px = relative_x * 32.0 + 640.0;
             let y_px = relative_y * 32.0 + 360.0;
             gpu.display(animation, (x_px, y_px), (transform.scale.x, transform.scale.y), rotation.0, z_index, Align::Center);
+        }
+    }
+}
+
+system! {
+    fn enemy_movement(
+        time: res &Time,
+        enemy: query (&mut Movement, &Direction),
+    ) {
+        let Some (time) = time else {return;};
+        thread::sleep(Duration::from_secs(2));
+        let mut enemy_ai = StateMachine::default();
+        let mut rng = rand::rng();
+        let both = Movement::Both;
+        let idle = Movement::Idle;
+        let directional = Movement::Directional;
+        let walking = Movement::Walking;
+        if enemy_ai.movement != idle {
+            if rng.random_range(0..2) == 0 { //Directional opportunity
+                if both == enemy_ai.movement || directional == enemy_ai.movement {
+                    enemy_ai.enemy_direction_opportunity();
+                }
+            } else { //Movement opportunity
+                if both == enemy_ai.movement || walking == enemy_ai.movement {
+                    enemy_ai.enemy_movement_opportunity();
+                }
+            }  
         }
     }
 }
