@@ -25,6 +25,7 @@ pub use utils::*;
 
 //Brandon's Enemy AI
 pub mod statemachine;
+pub use statemachine;
 pub use crate::statemachine::StateMachine;
 pub use crate::statemachine::Direction;
 pub use crate::statemachine::Movement;
@@ -256,24 +257,20 @@ system! {
 system! {
     fn enemy_movement(
         time: res &Time,
-        enemy: query (&mut Movement, &Direction),
+        enemy: query (&mut Transform, &mut Rotation2D, &mut StateMachine),
     ) {
         let Some (time) = time else {return;};
         thread::sleep(Duration::from_secs(2));
-        let mut enemy_ai = StateMachine::default();
         let mut rng = rand::rng();
-        let both = Movement::Both;
-        let idle = Movement::Idle;
-        let directional = Movement::Directional;
-        let walking = Movement::Walking;
-        if enemy_ai.movement != idle {
+
+        if enemy.movement != Movement::Idle {
             if rng.random_range(0..2) == 0 { //Directional opportunity
-                if both == enemy_ai.movement || directional == enemy_ai.movement {
-                    enemy_ai.enemy_direction_opportunity();
+                if Movement::Both == enemy.movement || Movement::Directional == enemy.movement {
+                    StateMachine::enemy_direction_opportunity();
                 }
             } else { //Movement opportunity
-                if both == enemy_ai.movement || walking == enemy_ai.movement {
-                    enemy_ai.enemy_movement_opportunity();
+                if Movement::Both == enemy.movement || Movement::Walking == enemy.movement {
+                    StateMachine::enemy_movement_opportunity();
                 }
             }  
         }
