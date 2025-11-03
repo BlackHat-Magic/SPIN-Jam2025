@@ -25,6 +25,10 @@ use utils::input::Input;
 pub use utils::time::*;
 pub use utils::*;
 
+pub use render::ui::TextDisplayable;
+use fontdb::{self, ID};
+use glyphon::FontSystem;
+
 static UNIT_SIZE: f32 = 32.0;
 static SPRITE_SCALE: f32 = 2.0;
 static PLAYER_SPEED: f32 = 16.0;
@@ -50,6 +54,14 @@ fn ray_intersects_segment(ray_origin: Vec3, ray_dir: Vec3, ray_len: f32, wall: &
     let s = (diff.x * ray_dir.y - diff.y * ray_dir.x) / denom;
 
     t >= 0.0 && t <= ray_len && s >= 0.0 && s <= 1.0
+}
+
+#[derive(Resource)]
+struct AiIndicators {
+    one: TextDisplayable,
+    two: TextDisplayable,
+    three: TextDisplayable,
+    bang: TextDisplayable
 }
 
 #[tokio::main]
@@ -81,10 +93,10 @@ async fn main() {
             self.app.add_plugin(plugins);
 
             self.app.add_system(update_animations, SystemStage::Update);
+            self.app.add_system(process_ai, SystemStage::Update);
             self.app.add_system(draw_sprites, SystemStage::Update);
             self.app.add_system(draw_walls, SystemStage::Update);
             self.app.add_system(control_player, SystemStage::Update);
-            self.app.add_system(process_ai, SystemStage::Update);
             self.app.add_system(init_scene, SystemStage::Init);
 
             self.app.init();
@@ -158,6 +170,42 @@ system! {
         let (Some(gpu), Some(images)) = (gpu, images) else {
             return;
         };
+
+        // load fonts
+        let mut font_db = fontdb::Database::new();
+        let font_map = gather_dir("fonts", |path| {
+            if !path
+                .extension()
+                .and_then(|s| s.to_str())
+                .map(|s| matches!(s, "ttf" | "otf" | "woff" | "woff2"))
+                .unwrap_or(false)
+            {
+                return None;
+            }
+            Some(font_db.load_font_source(fontdb::Source::File(path.to_path_buf()))[0])
+        }).expect("could not load fonts");
+        let mut fonts = FontSystem::new_with_locale_and_db("US".to_string(), font_db);
+
+        // Pick a font we have; prefer IndieFlower if present
+        let font_id: ID = *font_map
+            .get("IndieFlower")
+            .or_else(|| font_map.values().next())
+            .expect("no fonts loaded");
+
+        // Helper to build one label
+        let mut make = |s: &str, size: f32, color: [u8; 3]| {
+            let mut t = TextDisplayable::new(s.to_string(), font_id, size, Some(color));
+            t.prepare(gpu, &mut fonts).expect("prepare text");
+            t
+        };
+
+        // Slightly warm/yellow color reads well on most backgrounds
+        let one   = make(".",   22.0, [255, 235, 120]);
+        let two   = make("..",  22.0, [255, 235, 120]);
+        let three = make("...", 22.0, [255, 235, 120]);
+        let bang  = make("!",   26.0, [255, 90,  90 ]);
+
+        commands.insert_resource(AiIndicators { one, two, three, bang });
 
         // I hath decided: 1 unit is 32 px
         let background = commands.spawn_entity();
@@ -323,10 +371,13 @@ system! {
         gpu: res &mut Gpu,
         sprites: query (&Sprite, &Transform, &Rotation2D),
         animations: query (&Animation, &Transform, &Rotation2D),
+        enemies: query (&Sprite, &Transform, &Ai),
+        indicators: res &AiIndicators,
         player: query (&Transform, &Camera)
     ) {
         let Some(gpu) = gpu else {return;};
         let Some((player_transform, _camera)) = player.next() else {return;};
+        let Some(indicators) = indicators else { return; };
 
         for (sprite, transform, rotation) in sprites {
             let relative_x = transform.pos.x - player_transform.pos.x;
@@ -350,6 +401,45 @@ system! {
             let x_px = relative_x * UNIT_SIZE + SCREEN_W as f32 / 2.0;
             let y_px = relative_y * UNIT_SIZE + SCREEN_H as f32 / 2.0;
             gpu.display(animation, (x_px, y_px), (transform.scale.x, transform.scale.y), rotation.0, z_index, Align::Center);
+        }
+
+        for (enemy_sprite, transform, ai) in enemies {
+            // Screen position of enemy
+            let rx = transform.pos.x - player_transform.pos.x;
+            let ry = transform.pos.y - player_transform.pos.y;
+            let base_x = rx * UNIT_SIZE + SCREEN_W as f32 / 2.0;
+            let base_y = ry * UNIT_SIZE + SCREEN_H as f32 / 2.0;
+
+            // Offset above the enemy head: use sprite's pixel height * scale
+            let px_height = enemy_sprite.h as f32 * transform.scale.y;
+            let above = px_height * 0.6; // tweak as desired
+
+            // Pick the correct indicator by AI state/timers
+            let to_draw: Option<&TextDisplayable> = match ai.state {
+                AIState::Idle => None,
+                AIState::Sus(t) => {
+                    if t > 1.5 { Some(&indicators.one) }
+                    else if t > 1.0 { Some(&indicators.two) }
+                    else if t > 0.0 { Some(&indicators.three) }
+                    else { Some(&indicators.bang) } // just in case
+                }
+                AIState::Noticed(_)
+                | AIState::Chase(_)
+                | AIState::Search(_) => Some(&indicators.bang),
+            };
+
+            if let Some(ind) = to_draw {
+                // Draw slightly “on top” of the enemy sprite
+                let z = transform.pos.z + 0.01;
+                // Align bottom-center so the tip of "!" sits right above the head
+                gpu.display(ind,
+                    (base_x, base_y - above),
+                    (1.0, 1.0),
+                    0.0,
+                    z,
+                    Align::BottomCenter
+                );
+            }
         }
     }
 }
