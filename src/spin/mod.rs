@@ -1,6 +1,8 @@
 use crate::*;
 use glam::Vec3;
 
+pub mod post;
+
 #[derive(Resource)]
 pub struct PlayerPosition(pub Vec3);
 

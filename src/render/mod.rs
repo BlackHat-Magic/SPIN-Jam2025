@@ -19,6 +19,17 @@ use wgpu::{Extent3d, Texture, TextureDescriptor, TextureDimension, TextureFormat
 use winit::window::Window;
 
 #[derive(Resource)]
+pub struct PostProcessState {
+    pub pipeline: wgpu::RenderPipeline,
+    pub bind_group_layout: wgpu::BindGroupLayout,
+    pub sampler: wgpu::Sampler,
+    pub params_buffer: wgpu::Buffer,
+    // Internal intermediate color target we render the scene into
+    pub intermediate: Option<wgpu::Texture>,
+    pub last_size: (u32, u32),
+}
+
+#[derive(Resource)]
 pub struct Images {
     pub images: HashMap<String, ImageBuffer<Rgba<u8>, Vec<u8>>>,
 }
@@ -737,6 +748,8 @@ system!(
         to_display: query (&Transform, &ModelHandle, &MaterialHandle),
         lights: query (&Transform, &Light),
         camera: query (&Transform, &Camera),
+
+        post: res &mut PostProcessState, // NEW (optional)
     ) {
         let (Some(gpu), Some(shaders), Some(models), Some(materials)) = (gpu, shaders, models, materials) else {
             return;
@@ -747,14 +760,54 @@ system!(
             .get_current_texture()
             .expect("failed to acquire next swapchain texture");
 
-        let texture_view = surface_texture
+        let surface_view = surface_texture
             .texture
             .create_view(&wgpu::TextureViewDescriptor {
                 format: Some(gpu.surface_format),
                 ..Default::default()
             });
 
+        // Decide our color target for the main scene (either the intermediate, or the surface)
+        let mut use_post = false;
+        let mut scene_view_opt: Option<wgpu::TextureView> = None;
+
+        if let Some(pp) = post {
+            // Ensure/interpolate an intermediate same size as the surface
+            let size = (gpu.size.width.max(1), gpu.size.height.max(1));
+            let need_new = pp.intermediate.is_none()
+                || pp.last_size != size;
+            if need_new {
+                let tex = gpu.device.create_texture(&wgpu::TextureDescriptor {
+                    label: Some("PostProcess Intermediate"),
+                    size: wgpu::Extent3d {
+                        width: size.0,
+                        height: size.1,
+                        depth_or_array_layers: 1,
+                    },
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: wgpu::TextureDimension::D2,
+                    format: gpu.surface_format,
+                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+                    view_formats: &[],
+                });
+                pp.intermediate = Some(tex);
+                pp.last_size = size;
+            }
+            let view = pp
+                .intermediate
+                .as_ref()
+                .unwrap()
+                .create_view(&wgpu::TextureViewDescriptor::default());
+            scene_view_opt = Some(view);
+            use_post = true;
+        }
+
+        // We'll render the scene into 'scene_view' (if post) or directly into surface_view
+        let scene_view = scene_view_opt.as_ref().unwrap_or(&surface_view);
+
         if let Some((transform, camera)) = camera.next() {
+            // 1) Models pass into scene_view
             let mut encoder = gpu.device.create_command_encoder(&Default::default());
             {
                 let depth_view_option = gpu.depth_texture.as_ref().map(|tex| {
@@ -764,15 +817,10 @@ system!(
                 let mut renderpass_desc = wgpu::RenderPassDescriptor {
                     label: None,
                     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: &texture_view,
+                        view: scene_view,
                         resolve_target: None,
                         ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(wgpu::Color {
-                                r: 0.1,
-                                g: 0.2,
-                                b: 0.3,
-                                a: 1.0,
-                            }),
+                            load: wgpu::LoadOp::Clear(wgpu::Color { r: 0.1, g: 0.2, b: 0.3, a: 1.0 }),
                             store: wgpu::StoreOp::Store,
                         },
                     })],
@@ -792,11 +840,9 @@ system!(
                     });
                 }
 
-                let projection_matrix = camera.projection_matrix();
-                let projection_matrix = projection_matrix.to_cols_array_2d();
-
-                let view_matrix = transform.to_view_matrix();
-                let view_matrix = view_matrix.to_cols_array_2d();
+                // Same as before: uniform/camera/light and draw models...
+                let projection_matrix = camera.projection_matrix().to_cols_array_2d();
+                let view_matrix = transform.to_view_matrix().to_cols_array_2d();
 
                 let mut light_buffer = Vec::new();
                 for (transform, light) in lights {
@@ -809,24 +855,12 @@ system!(
                 for model in to_display {
                     let (transform, model_handle, material_handle) = model;
 
-                    let Some(model) = models.models.get(&model_handle.path) else {
-                        eprintln!("Model not found: {}", model_handle.path);
-                        continue;
-                    };
+                    let Some(model) = models.models.get(&model_handle.path) else { continue; };
+                    let Some(mat) = materials.materials.get(&material_handle.name) else { continue; };
 
-                    let Some(mat) = materials.materials.get(&material_handle.name) else {
-                        eprintln!("Material not found: {}", material_handle.name);
-                        continue;
-                    };
+                    let model_matrix = transform.to_matrix().to_cols_array_2d();
+                    let uniforms_data = [model_matrix, view_matrix, projection_matrix];
 
-                    let model_matrix = transform.to_matrix();
-                    let model_matrix = model_matrix.to_cols_array_2d();
-
-                    let uniforms_data = [
-                        model_matrix,
-                        view_matrix,
-                        projection_matrix,
-                    ];
                     let uniforms_buffer = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                         label: Some("Uniforms Buffer"),
                         contents: bytemuck::cast_slice(&uniforms_data),
@@ -850,50 +884,17 @@ system!(
                         label: Some("Model Bind Group"),
                         layout: &shaders.model_bind_group_layout,
                         entries: &[
-                            wgpu::BindGroupEntry {
-                                binding: 0,
-                                resource: uniforms_buffer.as_entire_binding(),
-                            },
-                            wgpu::BindGroupEntry {
-                                binding: 1,
-                                resource: light_buffer.as_entire_binding(),
-                            },
-                            wgpu::BindGroupEntry {
-                                binding: 2,
-                                resource: camera_buffer.as_entire_binding(),
-                            },
-                            wgpu::BindGroupEntry {
-                                binding: 3,
-                                resource: wgpu::BindingResource::TextureView(&mat.albedo.create_view(&Default::default())),
-                            },
-                            wgpu::BindGroupEntry {
-                                binding: 4,
-                                resource: wgpu::BindingResource::Sampler(&mat.albedo_sampler),
-                            },
-                            wgpu::BindGroupEntry {
-                                binding: 5,
-                                resource: wgpu::BindingResource::TextureView(&mat.metallic.create_view(&Default::default())),
-                            },
-                            wgpu::BindGroupEntry {
-                                binding: 6,
-                                resource: wgpu::BindingResource::Sampler(&mat.metallic_sampler),
-                            },
-                            wgpu::BindGroupEntry {
-                                binding: 7,
-                                resource: wgpu::BindingResource::TextureView(&mat.roughness.create_view(&Default::default())),
-                            },
-                            wgpu::BindGroupEntry {
-                                binding: 8,
-                                resource: wgpu::BindingResource::Sampler(&mat.roughness_sampler),
-                            },
-                            wgpu::BindGroupEntry {
-                                binding: 9,
-                                resource: wgpu::BindingResource::TextureView(&mat.ao.create_view(&Default::default())),
-                            },
-                            wgpu::BindGroupEntry {
-                                binding: 10,
-                                resource: wgpu::BindingResource::Sampler(&mat.ao_sampler),
-                            },
+                            wgpu::BindGroupEntry { binding: 0, resource: uniforms_buffer.as_entire_binding() },
+                            wgpu::BindGroupEntry { binding: 1, resource: light_buffer.as_entire_binding() },
+                            wgpu::BindGroupEntry { binding: 2, resource: camera_buffer.as_entire_binding() },
+                            wgpu::BindGroupEntry { binding: 3, resource: wgpu::BindingResource::TextureView(&mat.albedo.create_view(&Default::default())) },
+                            wgpu::BindGroupEntry { binding: 4, resource: wgpu::BindingResource::Sampler(&mat.albedo_sampler) },
+                            wgpu::BindGroupEntry { binding: 5, resource: wgpu::BindingResource::TextureView(&mat.metallic.create_view(&Default::default())) },
+                            wgpu::BindGroupEntry { binding: 6, resource: wgpu::BindingResource::Sampler(&mat.metallic_sampler) },
+                            wgpu::BindGroupEntry { binding: 7, resource: wgpu::BindingResource::TextureView(&mat.roughness.create_view(&Default::default())) },
+                            wgpu::BindGroupEntry { binding: 8, resource: wgpu::BindingResource::Sampler(&mat.roughness_sampler) },
+                            wgpu::BindGroupEntry { binding: 9, resource: wgpu::BindingResource::TextureView(&mat.ao.create_view(&Default::default())) },
+                            wgpu::BindGroupEntry { binding: 10, resource: wgpu::BindingResource::Sampler(&mat.ao_sampler) },
                         ],
                     });
 
@@ -902,21 +903,17 @@ system!(
                     model.render(&mut renderpass);
                 }
             }
-
             gpu.queue.submit([encoder.finish()]);
-            let mut encoder = gpu.device.create_command_encoder(&Default::default());
 
-            // Render quads in the same render pass
+            // 2) Quads pass into scene_view (unchanged except target)
+            let mut encoder = gpu.device.create_command_encoder(&Default::default());
             {
                 let renderpass_desc = wgpu::RenderPassDescriptor {
                     label: None,
                     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: &texture_view,
+                        view: scene_view,
                         resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Load,
-                            store: wgpu::StoreOp::Store,
-                        },
+                        ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store },
                     })],
                     depth_stencil_attachment: None,
                     timestamp_writes: None,
@@ -924,13 +921,11 @@ system!(
                 };
 
                 let mut renderpass = encoder.begin_render_pass(&renderpass_desc);
-                let index_buffer = gpu
-                    .device
-                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some("Quad Index Buffer"),
-                        contents: bytemuck::cast_slice(&[0u16, 1, 2, 2, 3, 0]),
-                        usage: wgpu::BufferUsages::INDEX,
-                    });
+                let index_buffer = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("Quad Index Buffer"),
+                    contents: bytemuck::cast_slice(&[0u16, 1, 2, 2, 3, 0]),
+                    usage: wgpu::BufferUsages::INDEX,
+                });
 
                 gpu.quads.iter().for_each(|quad| {
                     let texture_view = quad.texture.create_view(&Default::default());
@@ -948,14 +943,8 @@ system!(
                         label: Some("Quad Bind Group"),
                         layout: &shaders.quad_bind_group_layout,
                         entries: &[
-                            wgpu::BindGroupEntry {
-                                binding: 0,
-                                resource: wgpu::BindingResource::TextureView(&texture_view),
-                            },
-                            wgpu::BindGroupEntry {
-                                binding: 1,
-                                resource: wgpu::BindingResource::Sampler(&sampler),
-                            },
+                            wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&texture_view) },
+                            wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&sampler) },
                         ],
                     });
 
@@ -971,17 +960,15 @@ system!(
                     let cos_t = theta.cos();
                     let sin_t = theta.sin();
 
-                    // Rotate each corner offset
                     let tl_x = -hw * cos_t - (-hh) * sin_t;
                     let tl_y = -hw * sin_t + (-hh) * cos_t;
-                    let tr_x = hw * cos_t - (-hh) * sin_t;
-                    let tr_y = hw * sin_t + (-hh) * cos_t;
-                    let br_x = hw * cos_t - hh * sin_t;
-                    let br_y = hw * sin_t + hh * cos_t;
+                    let tr_x =  hw * cos_t - (-hh) * sin_t;
+                    let tr_y =  hw * sin_t + (-hh) * cos_t;
+                    let br_x =  hw * cos_t - hh * sin_t;
+                    let br_y =  hw * sin_t + hh * cos_t;
                     let bl_x = -hw * cos_t - hh * sin_t;
                     let bl_y = -hw * sin_t + hh * cos_t;
 
-                    // Convert to NDC
                     let tlx_ndc = ((cx + tl_x) / w * 2.0) - 1.0;
                     let tly_ndc = 1.0 - (cy + tl_y) / h * 2.0;
                     let trx_ndc = ((cx + tr_x) / w * 2.0) - 1.0;
@@ -991,18 +978,16 @@ system!(
                     let blx_ndc = ((cx + bl_x) / w * 2.0) - 1.0;
                     let bly_ndc = 1.0 - (cy + bl_y) / h * 2.0;
 
-                    let buffer = gpu
-                        .device
-                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                            label: Some("Quad Vertex Buffer"),
-                            contents: bytemuck::cast_slice(&[
-                                tlx_ndc, tly_ndc, quad.depth, 0.0, 0.0,
-                                trx_ndc, try_ndc, quad.depth, 1.0, 0.0,
-                                brx_ndc, bry_ndc, quad.depth, 1.0, 1.0,
-                                blx_ndc, bly_ndc, quad.depth, 0.0, 1.0,
-                            ]),
-                            usage: wgpu::BufferUsages::VERTEX,
-                        });
+                    let buffer = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("Quad Vertex Buffer"),
+                        contents: bytemuck::cast_slice(&[
+                            tlx_ndc, tly_ndc, quad.depth, 0.0, 0.0,
+                            trx_ndc, try_ndc, quad.depth, 1.0, 0.0,
+                            brx_ndc, bry_ndc, quad.depth, 1.0, 1.0,
+                            blx_ndc, bly_ndc, quad.depth, 0.0, 1.0,
+                        ]),
+                        usage: wgpu::BufferUsages::VERTEX,
+                    });
 
                     renderpass.set_pipeline(&shaders.quad_pipeline);
                     renderpass.set_bind_group(0, &bind_group, &[]);
@@ -1012,6 +997,50 @@ system!(
                 });
             }
             gpu.queue.submit([encoder.finish()]);
+
+            // 3) If post-process is enabled: full-screen pass from intermediate -> surface_view
+            if use_post {
+                let pp = post.unwrap(); // we already know it's Some
+
+                let mut encoder = gpu.device.create_command_encoder(&Default::default());
+                // bind group with current intermediate view + sampler + params
+                let src_view = pp
+                    .intermediate
+                    .as_ref()
+                    .unwrap()
+                    .create_view(&wgpu::TextureViewDescriptor::default());
+
+                let bind_group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("PostProcess Bind Group"),
+                    layout: &pp.bind_group_layout,
+                    entries: &[
+                        wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&src_view) },
+                        wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&pp.sampler) },
+                        wgpu::BindGroupEntry { binding: 2, resource: pp.params_buffer.as_entire_binding() },
+                    ],
+                });
+
+                let renderpass_desc = wgpu::RenderPassDescriptor {
+                    label: Some("PostProcess Pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &surface_view,
+                        resolve_target: None,
+                        ops: wgpu::Operations { load: wgpu::LoadOp::Clear(wgpu::Color::BLACK), store: wgpu::StoreOp::Store },
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                };
+
+                let mut rpass = encoder.begin_render_pass(&renderpass_desc);
+                rpass.set_pipeline(&pp.pipeline);
+                rpass.set_bind_group(0, &bind_group, &[]);
+                // Draw the full-screen triangle (3 vertices, no buffers)
+                rpass.draw(0..3, 0..1);
+                drop(rpass);
+
+                gpu.queue.submit([encoder.finish()]);
+            }
         }
 
         gpu.window.pre_present_notify();
