@@ -363,126 +363,122 @@ system! {
     ) {
         let Some(time) = time else {return;};
         let Some(player_pos) = player_pos else {return;};
-        let Some(walls_comp) = walls_comp.next() else {return;};
+        let Some(walls) = walls_comp.next() else {return;};
 
         for (enemy_transform, enemy_rotation, ai) in enemies {
             let displacement = player_pos.0 - enemy_transform.pos;
-            let rotation_dir = Vec3::new(enemy_rotation.0.cos(), enemy_rotation.0.sin(), 0.0);
-            let dot = rotation_dir.dot(displacement);
+            let dist = displacement.length();
+            let player_dir = displacement.normalize_or_zero();
+            let facing_dir = Vec3::new(enemy_rotation.0.cos(), enemy_rotation.0.sin(), 0.0);
+
+            // Helper: Check if player is visible (in range, FOV, clear LOS)
+            let mut is_visible = |current_facing_dir: Vec3| -> bool {
+                if dist > ENEMY_VISION_DIST || dist < f32::EPSILON { return false; }
+                let dot = current_facing_dir.dot(player_dir);
+                if dot.acos() > ENEMY_VISION_RADIANS { return false; }  // Out of FOV half-angle
+                // Check LOS: ray to player
+                for wall in walls.0.iter() {
+                    if ray_intersects_segment(enemy_transform.pos, player_dir, dist, wall) {
+                        return false;  // Hits wall before player
+                    }
+                }
+                true
+            };
+
             match ai.state {
                 AIState::Idle => {
-                    // if player is very close, they don't need to be looking at them
-                    if displacement.length() < ENEMY_PERSONAL_SPACE {
+                    if dist < ENEMY_PERSONAL_SPACE {
                         println!("Too close; sus");
                         ai.state = AIState::Sus(ENEMY_SUS_TIMER);
-                        return;
+                        continue;
                     }
+                    if !is_visible(facing_dir) { continue; }  // Not visible: stay idle
 
-                    // if player is very far, they can't see them
-                    if displacement.length() > ENEMY_VISION_DIST {
-                        return;
-                    }
-
-                    // otherwise, use vision cone
-                    if dot < 0.0 {
-                        return;
-                    }
-                    if dot.acos() > ENEMY_VISION_RADIANS {
-                        return; // ~60deg fov
-                    }
-
-                    // if view is occluded, they can't see
-                    // check this last because occlusion check is expensive
-                    for wall in walls_comp.0.iter() {
-                        if ray_intersects_segment(
-                            enemy_transform.pos,
-                            rotation_dir,
-                            ENEMY_VISION_DIST,
-                            wall
-                        ) {
-                            return;
-                        }
-                    }
-
-                    println!("In vision cone; sus");
+                    println!("In vision cone and visible; sus");
                     ai.state = AIState::Sus(ENEMY_SUS_TIMER);
+                    ai.last_position = player_pos.0;  // Record on detection
                 }
-                AIState::Sus(countdown) => {
-                    // if the countdown ran out, set to noticed
-                    if countdown <= 0.0 {
-                        println!("Noticed");
-                        ai.state = AIState::Noticed(ENEMY_SURPRISE_TIMER);
-                        return;
-                    }
-
-                    // if player is far away, we're chill.
-                    if displacement.length() > ENEMY_VISION_DIST {
-                        println!("Too far");
+                AIState::Sus(mut countdown) => {
+                    if !is_visible(facing_dir) {  // Check current facing (pre-turn)
+                        println!("Lost sight during sus");
                         ai.state = AIState::Idle;
                         ai.last_position = Vec3::ZERO;
-                        return;
+                        continue;
                     }
 
-                    // if view is occluded, they can't see
-                    for wall in walls_comp.0.iter() {
-                        if ray_intersects_segment(
-                            enemy_transform.pos,
-                            rotation_dir,
-                            ENEMY_VISION_DIST,
-                            wall
-                        ) {
-                            println!("Occluded");
-                            ai.state = AIState::Idle;
-                            // ai.last_position = Vec3::ZERO;
-                            return;
-                        }
+                    // Still visible: turn to player
+                    enemy_rotation.0 = displacement.y.atan2(displacement.x);
+                    let facing_dir_after_turn = Vec3::new(enemy_rotation.0.cos(), enemy_rotation.0.sin(), 0.0);
+                    if !is_visible(facing_dir_after_turn) {  // Double-check after turn (edge case)
+                        ai.state = AIState::Idle;
+                        continue;
                     }
 
-                    // look at the player
                     ai.last_position = player_pos.0;
-                    enemy_rotation.0 = displacement.y.atan2(displacement.x);
                     let mut dt = time.delta_seconds;
-                    if displacement.length() < ENEMY_PERSONAL_SPACE {
-                        dt *= 2.0; // deplete timer faster if player is very close
+                    if dist < ENEMY_PERSONAL_SPACE { dt *= 2.0; }
+                    countdown -= dt;
+                    if countdown <= 0.0 {
+                        println!("Sus timer out; noticed");
+                        ai.state = AIState::Noticed(ENEMY_SURPRISE_TIMER);
+                    } else {
+                        ai.state = AIState::Sus(countdown);
                     }
-                    ai.state = AIState::Sus(countdown - dt);
                 }
-                AIState::Noticed(countdown) => {
-                    let mut can_see = true;
-                    for wall in walls_comp.0.iter() {
-                        if ray_intersects_segment(
-                            enemy_transform.pos,
-                            rotation_dir,
-                            ENEMY_VISION_DIST,
-                            wall
-                        ) {
-                            println!("Occluded");
-                            ai.state = AIState::Idle;
-                            ai.last_position = Vec3::ZERO;
-                            can_see = false;
+                AIState::Noticed(mut countdown) => {
+                    let was_visible = is_visible(facing_dir);
+                    if !was_visible {
+                        println!("Lost sight during noticed");
+                        ai.state = AIState::Search(ENEMY_SUS_TIMER);  // Or Idle; search last pos
+                        continue;
+                    }
+
+                    // Turn to player (update facing for next frame's visible check)
+                    enemy_rotation.0 = displacement.y.atan2(displacement.x);
+                    ai.last_position = player_pos.0;
+
+                    countdown -= time.delta_seconds;
+                    if countdown <= 0.0 {
+                        println!("Noticed timer out; chase");
+                        ai.state = AIState::Chase(was_visible);  // Always true here, but for consistency
+                    } else {
+                        ai.state = AIState::Noticed(countdown);
+                    }
+                }
+                AIState::Chase(initially_visible) => {
+                    let target = if initially_visible && is_visible(facing_dir) {
+                        player_pos.0  // Still see: chase current
+                    } else {
+                        ai.last_position  // Lost sight: chase last known
+                    };
+                    let chase_disp = target - enemy_transform.pos;
+                    let chase_dist = chase_disp.length();
+                    if chase_dist > f32::EPSILON {
+                        let movement = chase_disp.normalize() * ENEMY_SPEED * time.delta_seconds;
+                        enemy_rotation.0 = chase_disp.y.atan2(chase_disp.x);
+                        enemy_transform.pos += movement;
+
+                        // Optional: If reach last pos and not visible, go to Search or Idle
+                        if !initially_visible && chase_dist < 0.5 {  // Threshold
+                            ai.state = AIState::Search(3.0);  // Search for 3s
                         }
                     }
-
-                    // if the countdown ran out, set to chase
-                    if countdown <= 0.0 {
-                        ai.state = AIState::Chase(can_see);
-                        return;
-                    }
-
-                    // look at the player
-                    if (can_see) {
-                        ai.last_position = player_pos.0;
-                    }
-                    enemy_rotation.0 = ai.last_position.y.atan2(ai.last_position.x);
-                    ai.state = AIState::Noticed(countdown - time.delta_seconds);
                 }
-                AIState::Chase(can_see) => {
-                    let movement = displacement.normalize() * ENEMY_SPEED * time.delta_seconds;
-                    enemy_rotation.0 = displacement.y.atan2(displacement.x);
-                    enemy_transform.pos += movement;
-                }
-                AIState::Search(countdown) => {
-                    return;
+                AIState::Search(mut countdown) => {
+                    // Simple: face/linger at last pos, check if regain sight
+                    if ai.last_position.length_squared() > 0.0 {
+                        let search_disp = ai.last_position - enemy_transform.pos;
+                        enemy_rotation.0 = search_disp.y.atan2(search_disp.x);
+                    }
+                    countdown -= time.delta_seconds;
+                    if is_visible(facing_dir) {
+                        ai.state = AIState::Sus(ENEMY_SUS_TIMER);  // Regain sight
+                    } else if countdown <= 0.0 {
+                        ai.state = AIState::Idle;
+                        ai.last_position = Vec3::ZERO;
+                    } else {
+                        ai.state = AIState::Search(countdown);
+                    }
                 }
             }
         }
