@@ -303,11 +303,10 @@ system! {
             p1: Vec3::new(1.0, -1.0, 0.0) * SPRITE_SCALE,
             p2: Vec3::new(4.0, -1.0, 0.0) * SPRITE_SCALE
         });
-        // TODO: why does this wall break everything?
-        // walls_comp.0.push(Wall {
-        //     p1: Vec3::new(4.0, -1.0, 0.0) * SPRITE_SCALE,
-        //     p2: Vec3::new(4.0, 7.0, 0.0) * SPRITE_SCALE
-        // });
+        walls_comp.0.push(Wall {
+            p1: Vec3::new(4.0, -1.0, 0.0) * SPRITE_SCALE,
+            p2: Vec3::new(4.0, 7.0, 0.0) * SPRITE_SCALE
+        });
         commands.add_component(walls, walls_comp);
         commands.add_component(walls, SpriteBuilder {
             image_path: "rawr".to_string(),
@@ -453,7 +452,7 @@ system! {
                     };
                     let chase_disp = target - enemy_transform.pos;
                     let chase_dist = chase_disp.length();
-                    if chase_dist > f32::EPSILON {
+                    if chase_dist > 1.0 {
                         let movement = chase_disp.normalize() * ENEMY_SPEED * time.delta_seconds;
                         enemy_rotation.0 = chase_disp.y.atan2(chase_disp.x);
                         enemy_transform.pos += movement;
